@@ -26,9 +26,23 @@ sim_VM <- function(n_obs, DGPS) {
   else if (DGPS == "multi_col"){
     dataset = genDS_MV_simple(n_obs = n_obs,
                               X_dist = "normal_cor")}
-  else if (DGPS == "non_linear"){
+  else if (DGPS == "nonLinear_1"){
     dataset = genDS_MV_simple(n_obs = n_obs,
-                              PS_ling = "non_linear")}
+                              PS_link = "nonLinear_1")}
+  else if (DGPS == "het_TE"){
+    dataset = genDS_MV_simple(n_obs = n_obs,
+                              Y_link = "het_TE")}
+  else if (DGPS == "many_irrelevant_X"){
+    dataset = genDS_MV_simple(n_obs = n_obs,
+                              PS_estimation = "many_irrelevant_X",
+                              n_X = 200)}
+  else if (DGPS == "lechner"){
+    dataset = genDS_MV_simple(n_obs = n_obs,
+                              treatment_assignment = "lechner")}
+  else if (DGPS == "lechner"){
+    dataset = genDS_MV_simple(n_obs = n_obs,
+                              X_dist = "two_norm_dist")}
+  
   PS_scores <- PS_estimators(dataset, estimators = c("log", "ridge", "lasso", "rf"), target_var = "T", vars_to_exclude = c("Y", "PS_scaled"))
   matched_data <- matching_function(PS_scores = PS_scores,
                                     dataset = dataset,
@@ -38,8 +52,8 @@ sim_VM <- function(n_obs, DGPS) {
   return(bias)
 }
 
-param_list = list("n_obs" = c(200,500, 1000), 
-                  "DGPS" = c("250var", "400var", "x_on_y", "multi_col", "non_linear"))
+param_list = list("n_obs" = c(200, 1000), 
+                  "DGPS" = c("lechner", "two_norm_dist"))
 sim_VM_result <- MonteCarlo(func = sim_VM, nrep = 15, param_list = param_list, time_n_test = TRUE, ncpus = 16)
-save(sim_VM_result, file = "sim_VM.Rdata")
+save(sim_VM_result, file = "sim_VM_2.Rdata")
 

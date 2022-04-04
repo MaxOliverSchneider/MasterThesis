@@ -136,7 +136,8 @@ save(sim_4_result, file = "scenario4.Rdata")
 ###
 
 #MakeTable(output=sim_1_result, rows="n_obs", cols=c("n_A", "n_B", "n_C"), digits=2, include_meta=FALSE)
-MakeTable(output=sim_VM_result, rows="list", cols=c("n_obs"), digits=2, include_meta=FALSE)
+MakeTable(output=sim_VM_result, rows="list", cols=c("n_obs", "DGPS"), digits=1, include_meta=FALSE)
+MakeTable(output=sim_VM_re, rows="list", cols=c("n_obs", "DGPS"), digits=1, include_meta=FALSE)
 #Can output standard deviation (or other metric) of results instead of their mean
 MakeTable(output=sim_VM_result, rows="list", cols=c("n_obs"), digits=2, include_meta=FALSE, collapse = list("sd", "sd", "sd", "sd","sd", "sd", "sd", "sd"))
 save(sim_4_result, file = "results/scenario1.Rdata")

@@ -96,15 +96,21 @@ genDSmultivariate_2 <- function(n_obs = 1000,
 ###
 # Generate most simple multivariate set-up
 ###
-genDS_MV_simple <- function(n_obs = 500, 
+genDS_MV_simple <- function(n_obs = 500,
                             n_X = 5,
                             X_dist = "normal_no_cor",
                             PS_link = "simple",
+                            Y_link = "simple",
+                            PS_estimation = "simple",
+                            treatment_assignment = "simple",
                             treatment_effect = 10,
                             alpha_PS = 5,
                             alpha_outcome = 0,
                             v_range = c(0,0),
                             e_range = c(0,0),
+                            alpha_treat = 0.3, #used in special case only
+                            lambda_treat = 1, #used in special case only
+                            share_treated = 0.3, #used in special case only
                             return_Matrix = FALSE) {
   if (X_dist == "normal_cor")   {
     Sigma = genPositiveDefMat(dim = n_X)$Sigma
@@ -112,29 +118,61 @@ genDS_MV_simple <- function(n_obs = 500,
   else if(X_dist == "normal_no_cor")  {
     X = mvrnorm(n = n_obs, mu = rep(0, n_X), Sigma = diag(n_X))}
   else if(X_dist == "unif_no_cor")  {
-    X = matrix(runif(n_obs), ncol=n_X)}
+    X = matrix(runif(n_obs), nrow = n_obs, ncol=n_X)}
   else if(X_dist == "poisson_no_cor") {
-    X = matrix(rpois(n_obs, lambda = 4), ncol=n_X)}
+    X = matrix(rpois(n_obs, lambda = 4), nrow = n_obs, ncol=n_X)}
+  else if(X_dist == "two_norm_dist"){
+    n_treated = round(share_treated * n_obs)
+    n_Ntreated = n_obs - n_treated
+    Sigma = genPositiveDefMat(dim = n_X)$Sigma
+    X_treated = mvrnorm(n = n_treated, rep(3, n_X), Sigma)
+    X_Ntreated = mvrnorm(n = n_Ntreated, rep(0, n_X), Sigma)
+    X = rbind(X_treated, X_Ntreated)
+  }
   v = runif(n_obs, min = v_range[1], max = v_range[2])
   e = runif(n_obs, min = e_range[1], max = e_range[2])
   dataset = data.frame(X)
+  print(dim(dataset))
   colnames(dataset) = c(paste0("X", 1:n_X))
   
-  if (PS_link == "simple"){
-    PS_unscaled = rowSums(alpha_PS * X) + v}
-  else if(PS_link == "nonLinear"){
-    intermediate = rowSums(alpha_PS *X)
-    m = mean(intermediate)
-    sd = sd(intermediate)
-    PS_unscaled <- ifelse(intermediate>m, 
-                          intermediate + 0.5 * sd, intermediate - 0.5 * sd)
+  if (PS_estimation == "simple"){
+    PS_score_raw <- rowSums(alpha_PS * X) + v}
+  else if(PS_estimation == "many_irrelevant_X") {
+    coefficients <- sample(c(1,0), size = n_X, replace = T, prob = c(0.2,0.8)) * alpha_PS
+    PS_score_raw <- X %*% coefficients
   }
   
+  if (PS_link == "simple"){
+    PS_unscaled = PS_score_raw}
+  else if(PS_link == "nonLinear_1"){
+    m = mean(PS_score_raw)
+    sd = sd(PS_score_raw)
+    PS_unscaled <- ifelse(PS_score_raw>m, 
+                          PS_score_raw + 0.3 * sd, PS_score_raw - 0.3 * sd)
+  }
+  
+  #Bring PS-score to lie between 0 and 1
   PS_scaled = rescale(PS_unscaled, to = c(0,1))
   dataset["PS_scaled"] <- PS_scaled
-  dataset["T"] <- rbinom(n_obs, 1, PS_scaled)
   
-  dataset["Y"] <- treatment_effect * dataset["T"] + rowSums(alpha_outcome * X) + e
+  #Treatment assignment
+  if (treatment_assignment == "simple") {
+  dataset["T"] <- rbinom(n_obs, 1, PS_scaled)}
+  else if (treatment_assignment == "lechner"){
+    beta_treat = round(runif(n_X, min = -3, max = 3))
+    indicator <- lambda_treat * (X%*% beta_treat) + alpha_treat + rnorm(n = n_obs, mean = 0, sd = 1)
+    dataset["T"] <- ifelse(indicator > 0, 1, 0)
+  }
+  
+  if (Y_link == "simple") {
+    dataset["Y"] <- treatment_effect * dataset["T"] + rowSums(alpha_outcome * X) + e}
+  else if (Y_link == "het_TE"){
+    het_TE <- sample(c(treatment_effect - 0.5*treatment_effect,
+                       treatment_effect + 0.5*treatment_effect), 
+                     size = n_obs, replace = TRUE)
+    dataset["Y"] <- het_TE * dataset["T"] + rowSums(alpha_outcome * X) + e
+  }
+  
   dataset["T"] <- as.factor(dataset[["T"]])
   if (return_Matrix) {return(as.matrix(dataset))} else {return(dataset)}
 }

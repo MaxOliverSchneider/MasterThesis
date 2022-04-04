@@ -2,7 +2,7 @@
 packages <- c("ggplot2", "plyr", "MonteCarlo", "data.table")
 lapply(packages, require, character.only = TRUE)
 
-#Load packages
+#Load scripts
 scripts = c("GenerateData.R") 
 invisible(lapply(paste0(getwd(), "/", scripts), source))
 

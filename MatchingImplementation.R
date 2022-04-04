@@ -22,19 +22,19 @@ matching_function <- function(PS_scores,
   
   if ("nn_one" %in% matching_estimators) {
     matching_results[["nn_one"]] <- lapply(PS_scores, nn_one, dataset = dataset, treatment = treatment, explanatory = explanatory) 
-    }
+  }
   if ("nnk" %in% matching_estimators) {
     matching_results[["nnk"]] <- lapply(PS_scores, nnk, dataset = dataset, treatment = treatment, explanatory = explanatory, ratio = ratio) 
-    }
+  }
   if ("stratum" %in% matching_estimators) {
     matching_results[["stratum"]] <- lapply(PS_scores, stratum, dataset = dataset, treatment = treatment, explanatory = explanatory, subclass = subclass, min.n = min.n)
-    }
+  }
   if ("caliper" %in% matching_estimators) {
     matching_results[["caliper"]] <- lapply(PS_scores, caliper, dataset = dataset, treatment = treatment, explanatory = explanatory, caliper = caliper) 
-    }
+  }
   if ("cs" %in% matching_estimators) {
     matching_results[["cs"]] <- lapply(PS_scores, cs, dataset = dataset, treatment = treatment, explanatory = explanatory) 
-    }
+  }
   return(matching_results)
 }
 
@@ -44,9 +44,9 @@ matching_function <- function(PS_scores,
 
 #One-to-one
 nn_one <- function(dataset,
-                treatment, 
-                explanatory,
-                PS){
+                   treatment, 
+                   explanatory,
+                   PS){
   f <- as.formula(paste(treatment, "~", paste(explanatory, collapse = "+")))
   match_log <- matchit(f, data = dataset, method = "nearest", distance = PS)
   md_log <- match.data(match_log)
@@ -70,11 +70,11 @@ nnk <- function(dataset,
 #the subclassification weights. Effects can be estimated either within each subclass and 
 #then averaged across them, or a single marginal effect can be estimated using the subclassification weights.
 stratum <- function(dataset,
-                treatment, 
-                explanatory,
-                subclass,
-                min.n,
-                PS){
+                    treatment, 
+                    explanatory,
+                    subclass,
+                    min.n,
+                    PS){
   f <- as.formula(paste(treatment, "~", paste(explanatory, collapse = "+")))
   match_log <- matchit(f, data = dataset, method = "subclass", distance = PS, subclass = subclass, min.n = min.n, estimand = "ATT")
   md_log <- match.data(match_log)
