@@ -144,7 +144,7 @@ gen_cor_dist <- function(n_obs = 500, n_var = 5, min_covar = 0.2, max_covar = 4,
   return(X)
 }
 
-gen_cor_dist <- function(n_obs = 500, n_var = 5, min_covar = 0.2, max_covar = 4, digits = 1) {
+gen_cor_dist <- function(n_obs = 500, n_var = 5, min_covar = 0.2, max_covar = 0.99, digits = 1) {
   matrix = matrix(nrow = n_var, ncol = n_var)
   sigma_random <- t(sapply(1:nrow(matrix),
                            function(i)
@@ -156,3 +156,13 @@ gen_cor_dist <- function(n_obs = 500, n_var = 5, min_covar = 0.2, max_covar = 4,
   X = mvrnorm(n = n_obs, mu = rep(0, n_var), Sigma = sigma_random)
   return(X)
 }
+
+#Dont really understand how it workds
+#Covariance with custom degree of colinearity
+# for (var in c(1, 1.1, 1.5, 2, 8, 20, 100, 1000)) {
+# 
+#   sigma = genPositiveDefMat(dim = n_X, rangeVar = c(0,var))$Sigma
+#   X = mvrnorm(n = n_obs, mu = rep(0,n_X), Sigma = sigma)
+#   print(paste("upper:", var))
+#   print(mean(cor(X)))
+# }

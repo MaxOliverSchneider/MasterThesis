@@ -127,17 +127,18 @@ param_list = list("n_obs" = c(200,500, 1000),
                              "x_on_y", "multi_col"))
 
 sim_result <- MonteCarlo(func = sim_different_set_ups, nrep = 10, param_list = param_list, time_n_test = TRUE)
-MakeTable(output=sim_4_result, rows="list", cols=c("n_obs"), digits=2, include_meta=FALSE)
+MakeTable(output=sim_VM_result, rows="list", cols=c("n_obs"), digits=2, include_meta=FALSE)
 save(sim_4_result, file = "scenario4.Rdata")
 
-
+test <- lm(Y~T, data = dataset)
+test
 ###
 # Generate table of results
 ###
 
 #MakeTable(output=sim_1_result, rows="n_obs", cols=c("n_A", "n_B", "n_C"), digits=2, include_meta=FALSE)
-MakeTable(output=sim_VM_result, rows="list", cols=c("n_obs", "DGPS"), digits=1, include_meta=FALSE)
-MakeTable(output=sim_VM_re, rows="list", cols=c("n_obs", "DGPS"), digits=1, include_meta=FALSE)
+MakeTable(output=sim_VM_result, rows="list", cols=c("var", "alpha_PS", "alpha_outcome"), digits=1, include_meta=FALSE)
+MakeTable(output=sim_VM_result, rows="list", cols=c("n_obs", "alpha_PS", "Y_error", "DGP"), digits=1, include_meta=FALSE)
 #Can output standard deviation (or other metric) of results instead of their mean
 MakeTable(output=sim_VM_result, rows="list", cols=c("n_obs"), digits=2, include_meta=FALSE, collapse = list("sd", "sd", "sd", "sd","sd", "sd", "sd", "sd"))
 save(sim_4_result, file = "results/scenario1.Rdata")
@@ -149,3 +150,7 @@ save(sim_4_result, file = "results/scenario1.Rdata")
 #Teile hinzufügen
 
 #For parallelization, have all functions available in workspace
+
+#Bei kleiner Beobachtungszahl (und bspw. extremerer Verteilung des PS) 
+#kann es passieren dass sich bspw bei treatment nur eine der zwei Ausprägungen im
+#Datensatz vorfinden

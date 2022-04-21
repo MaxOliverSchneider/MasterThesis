@@ -11,11 +11,11 @@ matching_function <- function(PS_scores,
                               dataset,
                               treatment = "T",
                               vars_to_exclude = c("Y", "PS_scaled"),
-                              matching_estimators = c("nn_one", "nnk", "stratum", "caliper", "cs"),
+                              matching_estimators = c("nn_one", "nnk", "stratum", "caliper_est", "cs"),
                               ratio = 2, #number of neighbors for knn
                               subclass = 6, #determines number of subclasses used for stratum matching
                               min.n = 1, #determines minimum of observation in subclass in stratum matching
-                              caliper = 0.2) {
+                              n_caliper = 0.2) {
   #Function includes all possible matching estimators and uses list of estimated PS scores
   matching_results = list()
   explanatory <- names(dataset)[!names(dataset) %in% c(treatment, vars_to_exclude)]
@@ -29,8 +29,8 @@ matching_function <- function(PS_scores,
   if ("stratum" %in% matching_estimators) {
     matching_results[["stratum"]] <- lapply(PS_scores, stratum, dataset = dataset, treatment = treatment, explanatory = explanatory, subclass = subclass, min.n = min.n)
   }
-  if ("caliper" %in% matching_estimators) {
-    matching_results[["caliper"]] <- lapply(PS_scores, caliper, dataset = dataset, treatment = treatment, explanatory = explanatory, caliper = caliper) 
+  if ("caliper_est" %in% matching_estimators) {
+    matching_results[["caliper"]] <- lapply(PS_scores, caliper_est, dataset = dataset, treatment = treatment, explanatory = explanatory, n_caliper = n_caliper) 
   }
   if ("cs" %in% matching_estimators) {
     matching_results[["cs"]] <- lapply(PS_scores, cs, dataset = dataset, treatment = treatment, explanatory = explanatory) 
@@ -82,15 +82,15 @@ stratum <- function(dataset,
 }
 
 #Caliper matching
-caliper <- function(dataset,
+caliper_est <- function(dataset,
                     treatment, 
                     explanatory,
                     #ratio = 2, Can also use it 
-                    caliper, #Recommended according to some papers https://cran.r-project.org/web/packages/MatchIt/vignettes/matching-methods.html#cardinality-and-template-matching-method-cardinality
+                    n_caliper, #Recommended according to some papers https://cran.r-project.org/web/packages/MatchIt/vignettes/matching-methods.html#cardinality-and-template-matching-method-cardinality
                     #Justify with papers named there, and could check some different specifications
                     PS){
   f <- as.formula(paste(treatment, "~", paste(explanatory, collapse = "+")))
-  match_log <- matchit(f, data = dataset, method = "nearest", distance = PS, caliper = caliper, std.caliper = TRUE) #If False, caliper is in actual and not st. dev units
+  match_log <- matchit(f, data = dataset, method = "nearest", distance = PS, caliper = n_caliper, std.caliper = TRUE) #If False, caliper is in actual and not st. dev units
   md_log <- match.data(match_log)
   return(list(matched_data = md_log, weights = md_log$weights))
 }
@@ -110,6 +110,11 @@ cs <- function(dataset,
 ###
 # Evaluating matching
 ###
-# summary(match_test_4)
-# plot(match_test_4, type = "jitter", interactive = FALSE)
-# plot(summary(match_test_4))
+# matched_data <- matching_function(PS_scores = PS_scores,
+#                                   dataset = dataset,
+#                                   matching_estimators = c("nn_one", "nnk", "stratum", "caliper_est", "cs"))
+# TE_effects <- estimate_TE(matched_data, include_DML = FALSE)
+# TE_effects
+# 
+# match_test <- cs(dataset = dataset, treatment = "T", explanatory = c("X1", "X2", "X3"), PS = PS_scores[[1]])
+# match_test<- matchit(T~X1+X2+X3, data = dataset, method = "nearest", distance = PS_scores[[1]], discard = "control")
