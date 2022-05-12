@@ -1,14 +1,23 @@
 scripts = c("Graphs.R") 
 invisible(lapply(paste0(getwd(), "/", scripts), source))
 
-simNoToLoad <- 12
-load(paste0("~/Master/FS 21/MA/FrÃ¶lich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
+simNoToLoad <- 20
+load(paste0("~/Master/FS 21/MA/Frölich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
 
 summary(sim_VM_result)
 params = names(sim_VM_result$param_list)
 
-MakeTable(output=sim_VM_result, rows="list", 
-          cols=c(params), digits=2, include_meta=FALSE)
+#Create output with means
+MakeTable(output=sim_VM_result, rows="list",
+          cols=c(params), digits=1, include_meta=FALSE)
+
+#Create output with standard deviations
+#Need to set number of estimators
+no_estimators <- 53 #Taken from summary under parameter grid X ouput arrays of dimensions: ...
+MakeTable(output=sim_VM_result, rows="list",
+          cols=c(params), digits=1, include_meta=FALSE, collapse = as.list(rep("sd", no_estimators)))
+
+#Custom ordering of columns
 MakeTable(output=sim_VM_result, rows="list", 
           cols=c("alpha_PS", "beta_PS", "cor_X"), digits=2, include_meta=FALSE)
 MakeTable(output=sim_VM_result, rows="list", 

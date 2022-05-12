@@ -10,7 +10,7 @@ lapply(packages, require, character.only = TRUE)
 matching_function <- function(PS_scores,
                               dataset,
                               treatment = "T",
-                              vars_to_exclude = c("Y", "PS_scaled"),
+                              vars_to_exclude = c("Y", "PS"),
                               matching_estimators = c("nn_one", "nnk", "stratum", "caliper_est", "cs"),
                               ratio = 2, #number of neighbors for knn
                               subclass = 6, #determines number of subclasses used for stratum matching
@@ -27,16 +27,51 @@ matching_function <- function(PS_scores,
     matching_results[["nnk"]] <- lapply(PS_scores, nnk, dataset = dataset, treatment = treatment, explanatory = explanatory, ratio = ratio) 
   }
   if ("stratum" %in% matching_estimators) {
-    matching_results[["stratum"]] <- lapply(PS_scores, stratum, dataset = dataset, treatment = treatment, explanatory = explanatory, subclass = subclass, min.n = min.n)
+    matching_results[["stratum"]] <- tryCatch({lapply(PS_scores, stratum, dataset = dataset, treatment = treatment, explanatory = explanatory, subclass = subclass, min.n = min.n)},
+                                              error=function(error_message){
+                                                message(paste("Stratum matching failed; N_Obs: ", nrow(dataset), " nn_one results attached instead"))
+                                                message(error_message)
+                                                return(matching_results[["nn_one"]])
+                                              },
+                                              warning=function(error_message){
+                                                message(paste("Stratum matching failed (warning); N_Obs: ", nrow(dataset), " nn_one results attached instead"))
+                                                message(error_message)
+                                                return(matching_results[["nn_one"]])
+                                              }
+    )
   }
   if ("caliper_est" %in% matching_estimators) {
-    matching_results[["caliper"]] <- lapply(PS_scores, caliper_est, dataset = dataset, treatment = treatment, explanatory = explanatory, n_caliper = n_caliper) 
+    matching_results[["caliper"]] <- tryCatch({lapply(PS_scores, caliper_est, dataset = dataset, treatment = treatment, explanatory = explanatory, n_caliper = n_caliper) },
+                                              error=function(error_message){
+                                                message(paste("Caliper matching failed; N_Obs: ", nrow(dataset), " nn_one results attached instead"))
+                                                message(error_message)
+                                                return(matching_results[["nn_one"]])
+                                              },
+                                              warning=function(error_message){
+                                                message(paste("Caliper matching failed (warning); N_Obs: ", nrow(dataset), " nn_one results attached instead"))
+                                                message(error_message)
+                                                return(matching_results[["nn_one"]])
+                                              }
+    )
+    
   }
   if ("cs" %in% matching_estimators) {
-    matching_results[["cs"]] <- lapply(PS_scores, cs, dataset = dataset, treatment = treatment, explanatory = explanatory) 
+    matching_results[["cs"]] <- tryCatch({lapply(PS_scores, cs, dataset = dataset, treatment = treatment, explanatory = explanatory)  },
+                                         error=function(error_message){
+                                           message(paste("Common support matching failed;  N_Obs: ", nrow(dataset), " nn_one results attached instead"))
+                                           message(error_message)
+                                           return(matching_results[["nn_one"]])
+                                         },
+                                         warning=function(error_message){
+                                           message(paste("Common support matching failed (warning); N_Obs: ", nrow(dataset), " nn_one results attached instead"))
+                                           message(error_message)
+                                           return(matching_results[["nn_one"]])
+                                         }
+    )
   }
   return(matching_results)
 }
+
 
 ###
 # Implementation of different matching estimators

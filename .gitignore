@@ -9,3 +9,7 @@ Evaluating DGPs.R
 nohup.out
 Test.Rdata
 results/
+dump*.rda
+images/
+test.tex
+.rda

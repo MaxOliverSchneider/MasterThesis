@@ -166,3 +166,15 @@ gen_cor_dist <- function(n_obs = 500, n_var = 5, min_covar = 0.2, max_covar = 0.
 #   print(paste("upper:", var))
 #   print(mean(cor(X)))
 # }
+
+#Plot distribution of bias
+#Probably needs some modification to show distribution of one particular set-up
+#Should not be used
+dist_bias_sim_result <- function(sim_result, params =c("n_obs", "DGPS")) {
+  data <- MakeFrame(sim_result)
+  data_long <- melt(setDT(data), id.vars = params, variable.name = "estimators")
+  plot_estimate_dist <- ggplot(data_long, aes(x=value, color = estimators)) +
+    #plot_estimate_dist <- ggplot(data_long[n_obs==500,], aes(x=value, color = estimators)) +
+    geom_density()  
+  plot_estimate_dist
+}
