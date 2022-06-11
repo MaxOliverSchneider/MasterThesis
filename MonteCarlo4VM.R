@@ -540,52 +540,569 @@ invisible(lapply(paste0(getwd(), "/", scripts), source))
 #                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
 # save(sim_VM_result, file = "sim_VM_19.Rdata")
 
-sim_VM <- function(DGP, n_obs){
-  PS_impact = "linear"
-  Y_impact = "linear"
-  if (DGP == "quadratic_linear") {PS_impact = "quadratic"}
-  if (DGP == "quadratic2_linear") {PS_impact = "quadratic_2"}
-  if (DGP == "quadratic3_linear") {PS_impact = "quadratic_3"}
-  if (DGP == "linear_quadratic") {Y_impact = "quadratic"}
-  if (DGP == "quadratic_quadratic") {
-    Y_impact = "quadratic" 
-    PS_impact = "quadratic"}
+# sim_VM <- function(DGP, n_obs){
+#   PS_impact = "linear"
+#   Y_impact = "linear"
+#   alpha_PS = -0.2
+#   adjust_beta_PS = 0.35
+#   if (DGP == "quadratic_linear") {
+#     PS_impact = "quadratic"
+#     adjust_beta_PS = 0.35}
+#   if (DGP == "linear_quadratic") {
+#     Y_impact = "quadratic"}
+#   if (DGP == "quadratic_quadratic") {
+#     Y_impact = "quadratic"
+#     PS_impact = "quadratic"
+#     adjust_beta_PS = 0.2
+#     alpha_PS = -1.6}
+# 
+#   dataset <- gen_DS_modular(
+#     PS_impact = PS_impact, Y_impact = Y_impact, n_obs = n_obs,
+#     X_dim = 10, X_impact_share_PS = 0.7, X_covar = 0.5, X_impact_share_Y = 0.7,
+#     X_impact_shift_percent = 0.3, adjust_beta_PS = TRUE, adjust_alpha_Y = TRUE,
+#     alpha_PS = alpha_PS, beta_adjust_power_PS = adjust_beta_PS)
+# 
+#   #Check for excessive mean diff ins PS scores
+#   mean_diff <- mean(dataset$PS[dataset$T == 1]) - mean(dataset$PS[dataset$T == 0])
+#   PS_est <- c("true", "log", "probit", "ridgeInterPoly", "lassoInterPoly",
+#               "bayes_ridgeInterPoly", "bayes_lassoInterPoly", "rf", "nn")
+#   Matching_estimators <- c("nn_one", "nnk", "stratum", "caliper_est", "cs")
+# 
+#   if (mean_diff >= 0.25) {
+#     combined_estimators <- c(apply(expand.grid(
+#       PS_est, replace(
+#         Matching_estimators, Matching_estimators == "caliper_est", "caliper"))[,c(2,1)], 1, base::paste0, collapse="_"), "DML")
+#     bias = setNames(as.list(rep(9999, length(combined_estimators))), combined_estimators)
+#   } else {
+# 
+#     PS_scores <- PS_estimators(dataset,
+#                                estimators = PS_est,
+#                                target_var = "T",
+#                                vars_to_exclude = c("Y", "PS"))
+#     matched_data <- matching_function(PS_scores = PS_scores,
+#                                       dataset = dataset,
+#                                       matching_estimators = Matching_estimators)
+#     TE_effects <- estimate_TE(matched_data, data = dataset, include_DML = TRUE, include_SimpleReg = TRUE)
+#     bias <- lapply(TE_effects, function(x) x - 1)
+#   }
+#   return(bias)
+# }
+# 
+# param_list <- list("n_obs" = c(1000,3000),
+#                    "DGP" = c("linear_linear","quadratic_linear",# "quadratic2_linear", "quadratic3_linear",
+#                               "linear_quadratic",
+#                      "quadratic_quadratic"))
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 15,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 4), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_24.Rdata")
+#  
 
+# sim_VM <- function(DGP, n_obs){
+#   PS_error = FALSE
+#   Y_error = FALSE
+#   if(DGP == "ps_error") {PS_error = TRUE}
+#   if(DGP == "y_error") {Y_error = TRUE}
+#   if(DGP == "y_ps_error") {
+#     Y_error = TRUE
+#     PS_error = TRUE
+#   }
+# 
+# 
+#   dataset <- gen_DS_modular(
+#     n_obs = n_obs,
+#     X_dim = 10, X_impact_share_PS = 0.7, X_impact_share_Y = 0.7,
+#     X_impact_shift_percent = 0.3, adjust_beta_PS = TRUE, beta_adjust_power_PS = 0.3,
+#     adjust_alpha_Y = TRUE,
+#     Y_error = Y_error, PS_error = PS_error, alpha_PS = -0.2)
+#   #Check for excessive mean diff ins PS scores
+#   mean_diff <- mean(dataset$PS[dataset$T == 1]) - mean(dataset$PS[dataset$T == 0])
+#   PS_est <- c("true", "log", "probit", "ridgeInterPoly", "lassoInterPoly",
+#               "bayes_ridgeInterPoly", "bayes_lassoInterPoly", "rf", "nn")
+#   Matching_estimators <- c("nn_one", "nnk", "stratum", "caliper_est", "cs")
+# 
+#   if (mean_diff >= 0.25) {
+#     combined_estimators <- c(apply(expand.grid(
+#       PS_est, replace(
+#         Matching_estimators, Matching_estimators == "caliper_est", "caliper"))[,c(2,1)], 1, base::paste0, collapse="_"), "DML")
+#     bias = setNames(as.list(rep(9999, length(combined_estimators))), combined_estimators)
+#   } else {
+# 
+#     PS_scores <- PS_estimators(dataset,
+#                                estimators = PS_est,
+#                                target_var = "T",
+#                                vars_to_exclude = c("Y", "PS"))
+#     matched_data <- matching_function(PS_scores = PS_scores,
+#                                       dataset = dataset,
+#                                       matching_estimators = Matching_estimators)
+#     TE_effects <- estimate_TE(matched_data, data = dataset, include_DML = TRUE, include_SimpleReg = TRUE)
+#     bias <- lapply(TE_effects, function(x) x - 1)
+#   }
+#   return(bias)
+# }
+# 
+# param_list <- list("n_obs" = c(1000,3000),
+#                    "DGP" = c("no_error", "ps_error", "y_error", "y_ps_error"))
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 15,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 4), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_22.Rdata")
+
+# sim_VM <- function(covar, n_obs){
+#   dataset <- gen_DS_modular(
+#     n_obs = n_obs, X_covar = covar, Y_impact = "heterogeneous",
+#     X_dim = 10, X_impact_share_PS = 0.7, X_impact_share_Y = 0.7,
+#     X_impact_shift_percent = 0.3, adjust_beta_PS = TRUE, beta_adjust_power_PS = 0.3,
+#     adjust_alpha_Y = TRUE, alpha_PS = -0.2)
+#   #Check for excessive mean diff ins PS scores
+#   mean_diff <- mean(dataset$PS[dataset$T == 1]) - mean(dataset$PS[dataset$T == 0])
+#   PS_est <- c("true", "log", "probit", "ridgeInterPoly", "lassoInterPoly",
+#               "bayes_ridgeInterPoly", "bayes_lassoInterPoly", "rf", "nn")
+#   Matching_estimators <- c("nn_one", "nnk", "stratum", "caliper_est", "cs")
+# 
+#   if (mean_diff >= 0.25) {
+#     combined_estimators <- c(apply(expand.grid(
+#       PS_est, replace(
+#         Matching_estimators, Matching_estimators == "caliper_est", "caliper"))[,c(2,1)], 1, base::paste0, collapse="_"), "DML")
+#     bias = setNames(as.list(rep(9999, length(combined_estimators))), combined_estimators)
+#   } else {
+# 
+#     PS_scores <- PS_estimators(dataset,
+#                                estimators = PS_est,
+#                                target_var = "T",
+#                                vars_to_exclude = c("Y", "PS"))
+#     matched_data <- matching_function(PS_scores = PS_scores,
+#                                       dataset = dataset,
+#                                       matching_estimators = Matching_estimators)
+#     TE_effects <- estimate_TE(matched_data, data = dataset, include_DML = TRUE, include_SimpleReg = TRUE)
+#     bias <- lapply(TE_effects, function(x) x - 1)
+#   }
+#   return(bias)
+# }
+# 
+# param_list <- list("n_obs" = c(1000,3000),
+#                    "covar" = c(0,0.3,0.7))
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 15,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 4), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_23.Rdata")
+
+# sim_VM <- function(X_dim){
+#   dataset <- gen_DS_modular(
+#     n_obs = 1500, X_covar = 0.3,
+#     X_dim = X_dim, X_impact_share_PS = 0.7, X_impact_share_Y = 0.7, PS_impact = "range_assign",
+#     X_impact_shift_percent = 0.3, adjust_beta_PS = TRUE, beta_PS = 0.5, alpha_PS = -1.3, beta_adjust_power_PS = 0.5)
+#   #Check for excessive mean diff ins PS scores
+#   mean_diff <- mean(dataset$PS[dataset$T == 1]) - mean(dataset$PS[dataset$T == 0])
+#   PS_est <- c("true", "log", "probit", "ridgeInterPoly", "lassoInterPoly",
+#               "bayes_ridgeInterPoly", "bayes_lassoInterPoly", "rf", "rf2", "nn")
+#   Matching_estimators <- c("nn_one", "nnk", "stratum", "caliper_est", "cs")
+# 
+#   if (mean_diff >= 0.25) {
+#     combined_estimators <- c(apply(expand.grid(
+#       PS_est, replace(
+#         Matching_estimators, Matching_estimators == "caliper_est", "caliper"))[,c(2,1)], 1, base::paste0, collapse="_"), "DML")
+#     bias = setNames(as.list(rep(9999, length(combined_estimators))), combined_estimators)
+#   } else {
+# 
+#     PS_scores <- PS_estimators(dataset,
+#                                estimators = PS_est,
+#                                target_var = "T",
+#                                vars_to_exclude = c("Y", "PS"))
+#     matched_data <- matching_function(PS_scores = PS_scores,
+#                                       dataset = dataset,
+#                                       matching_estimators = Matching_estimators)
+#     TE_effects <- estimate_TE(matched_data, data = dataset, include_DML = TRUE, include_SimpleReg = TRUE)
+#     bias <- lapply(TE_effects, function(x) x - 1)
+#   }
+#   return(bias)
+# }
+# 
+#   
+# param_list <- list("X_dim" = c(20))
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 15,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_26.Rdata")
+
+# sim_VM <- function(PS_impact, n_obs){
+#   PS_link = "raw"
+#   if (PS_impact %in% c("flat", "linear", "quadraticSymmetric",
+#                        "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
+#   dataset <- gen_DS_modular(n_obs = n_obs, Y_impact = "paper", PS_function = "paper",
+#                             PS_impact = PS_impact, PS_link = PS_link, min_X = 0)
+#   PS_est <- c("true", "log", "meanT", "zeroOFive")
+#   Matching_estimators <- c("nn_one", "nnk")
+# 
+#   PS_scores <- PS_estimators(dataset,
+#                              estimators = PS_est,
+#                              target_var = "T",
+#                              vars_to_exclude = c("Y", "PS"))
+#   #Drop all observations in dataset and estimated PS_scores with PS not in [0.02,0.98] range of logit estimated scores
+#   quantiles <- quantile(PS_scores$log, c(0.02,0.98))
+#   indicator <- (PS_scores$log > quantiles[[1]] & PS_scores$log < quantiles[[2]])
+#   dataset <- dataset[indicator,]
+#   PS_scores <- lapply(PS_scores, function(x) x[indicator])
+# 
+#   matched_data <- matching_function(PS_scores = PS_scores,
+#                                     dataset = dataset,
+#                                     matching_estimators = Matching_estimators)
+#   TE_effects <- estimate_TE(matched_data, data = dataset, PS_scores = PS_scores,
+#                             include_DML = TRUE, include_SimpleReg = TRUE,
+#                             include_IPW = TRUE, include_NIPW = TRUE)
+#   #Need to already calculate desired PS metrics here and return them as such
+#   return(TE_effects)
+# }
+# 
+# 
+# param_list <- list("n_obs" = c(100,1000,10000),
+#                    "PS_impact" = c("flat", "linear", "quadraticSymmetric",
+#                                    "quadraticNonSymmetric", "fourthDegree",
+#                                    "peakSymmetric", "peakNonSymmetric", "stepMonotonic",
+#                                    "stepNonMonotonic"))
+# 
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 10000,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_35.Rdata")
+
+# sim_VM <- function(PS_impact, n_obs){
+#   #Used for estimating variance
+#   PS_link = "raw"
+#   if (PS_impact %in% c("flat", "linear", "quadraticSymmetric", 
+#                        "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
+#   dataset <- gen_DS_modular(n_obs = n_obs, Y_impact = "paper", PS_function = "paper", 
+#                             PS_impact = PS_impact, PS_link = PS_link, min_X = 0)
+#   PS_est <- c("true", "log", "probit", "meanT", "zeroOFive")
+#   Matching_estimators <- c("nn_one", "nnk")
+#   
+#   PS_scores <- PS_estimators(dataset,
+#                              estimators = PS_est,
+#                              target_var = "T",
+#                              vars_to_exclude = c("Y", "PS"))
+#   #Drop all observations in dataset and estimated PS_scores with PS not in [0.02,0.98] range of logit estimated scores
+#   quantiles <- quantile(PS_scores$log, c(0.02,0.98))
+#   indicator <- (PS_scores$log > quantiles[[1]] & PS_scores$log < quantiles[[2]])
+#   dataset <- dataset[indicator,]
+#   PS_scores <- lapply(PS_scores, function(x) x[indicator])
+#   
+#   matched_data <- matching_function(PS_scores = PS_scores,
+#                                     dataset = dataset,
+#                                     matching_estimators = Matching_estimators)
+#   TE_effects <- estimate_TE(matched_data, data = dataset, PS_scores = PS_scores,
+#                             include_DML = TRUE, include_SimpleReg = TRUE,
+#                             include_IPW = TRUE, include_NIPW = TRUE)
+#   TE <- list(TE_effects$IPW_log, TE_effects$NIPW_log)
+#   Var <- lapply(TE, est_var, dataset = dataset, PS_score = PS_scores$log)
+#   names(Var) <- c("IPW_Var", "NIPW_VAR")
+#   return(Var)
+# }
+# 
+# 
+# param_list <- list("n_obs" = c(1000),
+#                    "PS_impact" = c("flat", "linear", "quadraticSymmetric", 
+#                                    "quadraticNonSymmetric", "fourthDegree",
+#                                    "peakSymmetric", "peakNonSymmetric", "stepMonotonic", 
+#                                    "stepNonMonotonic"))
+# 
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 2000,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_32.Rdata")
+# 
+
+# sim_VM <- function(PS_impact, n_obs){
+#   #Used for estimating variance
+#   PS_link = "raw"
+#   if (PS_impact %in% c("flat", "linear", "quadraticSymmetric",
+#                        "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
+#   dataset <- gen_DS_modular(n_obs = n_obs, Y_impact = "paper", PS_function = "paper",
+#                             PS_impact = PS_impact, PS_link = PS_link, min_X = 0)
+# 
+#   PS_model <- Log_PS_pred(data = dataset, return_Model = TRUE)
+# 
+#   # MISE <- est_MISE(PS_model_est = PS_model, PS_impact = PS_impact, PS_link = PS_link)
+#   # SUP <- est_SUP(PS_model_est = PS_model, PS_impact = PS_impact, PS_link = PS_link)
+#   M = 100
+#   grid <- data.frame(seq(0,1,0.01), rep(1,M+1))
+#   colnames(grid) <- c("X", "OneVector")
+#   PS_pred_est <- rep(mean(as.numeric(dataset$T)-1), 101)
+#   PS_pred_true <- gen_PS_paper(X = as.matrix(grid[,1]), impact_formula = PS_impact, link_type = PS_link)
+#   MISE <- (1/M) * sum((PS_pred_est-PS_pred_true)^2)
+#   SUP <- max(abs(PS_pred_est-PS_pred_true))
+#   results <- list(MISE, SUP)
+#   names(results) <- c("MISE", "SUP")
+#   return(results)
+# }
+# 
+# 
+# param_list <- list("n_obs" = c(1000),
+#                    "PS_impact" = c("flat", "linear", "quadraticSymmetric",
+#                                    "quadraticNonSymmetric", "fourthDegree",
+#                                    "peakSymmetric", "peakNonSymmetric", "stepMonotonic",
+#                                    "stepNonMonotonic"))
+# 
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 2000,
+#                                    param_list = param_list, time_n_test = FALSE), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_34.Rdata")
+
+# sim_VM <- function(PS_impact, n_obs){
+#   PS_link = "raw"
+#   if (PS_impact %in% c("flat", "linear", "quadraticSymmetric",
+#                        "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
+#   dataset <- gen_DS_modular(n_obs = n_obs, Y_impact = "paper", PS_function = "paper",
+#                             PS_impact = PS_impact, PS_link = PS_link, min_X = 0)
+#   Matching_estimators <- c("nn_one")
+#   polynomials <- c(0,1,2,3,4,5,6,7,8,9)
+#   polynomials_vec <- c()
+#   PS_scores <- list()
+#   PS_models <- list()
+#   for (i in polynomials){
+#     polynomials_vec <- c(polynomials_vec, i)
+#     PS <- Log_PS_pred(data = dataset, polynomials_vector = polynomials_vec)
+#     PS_scores <- append(PS_scores, list(PS))
+#     
+#     PS_model <- Log_PS_pred(data = dataset, polynomials_vector = polynomials_vec, return_Model = TRUE)
+#     PS_models <- append(PS_models, list(PS_model))
+#   }
+#   names(PS_scores) <- polynomials
+#   names(PS_models) <- polynomials
+#   
+#   #Trimming and calculating treatment effects in same loop
+#   datasets <- list()
+#   IPW_results <- list()
+#   NIPW_results <- list()
+#   quantiles_list <- lapply(PS_scores, stats::quantile, c(0.02,0.98))
+#   for (i in polynomials+1){
+#     indicator <- (PS_scores[[i]] > quantiles_list[[i]][[1]] & PS_scores[[i]] < quantiles_list[[i]][[2]])
+#     if(i>1){ #Because trimming is not working with a constant PS score
+#       datasets[[i]] <- dataset[indicator,]
+#       PS_scores[[i]] <- PS_scores[[i]][indicator]
+#     } else {
+#       datasets[[i]] <- dataset
+#       PS_scores[[i]] <- PS_scores[[i]]
+#     }
+#     IPW_results[[i]] <- IPW_fun(PS_est = PS_scores[[i]],dataset =  datasets[[i]])
+#     NIPW_results[[i]] <- NIPW_fun(PS_est = PS_scores[[i]], dataset = datasets[[i]])
+#   }
+# 
+#   
+#   #MISE & SUP
+#   MISEs <- lapply(PS_models, est_MISE, PS_impact = PS_impact, PS_link = PS_link)
+#   SUPs <- lapply(PS_models, est_SUP, PS_impact = PS_impact, PS_link = PS_link)
+#   
+#   names(IPW_results) <- paste0("IPW_w_poly", polynomials)
+#   names(NIPW_results) <- paste0("NIPW_w_poly", polynomials)
+#   names(MISEs) <- paste0("MISE_w_poly_", polynomials)
+#   names(SUPs) <- paste0("SUP_w_poly_", polynomials)
+#   estimates <- c(IPW_results, NIPW_results, MISEs, SUPs)
+#   #Need to already calculate desired PS metrics here and return them as such
+#   return(estimates)
+# }
+# 
+# 
+# param_list <- list("n_obs" = c(1000),
+#                    "PS_impact" = c("flat", "linear", "quadraticSymmetric",
+#                                    "quadraticNonSymmetric", "fourthDegree",
+#                                    "peakSymmetric", "peakNonSymmetric", "stepMonotonic",
+#                                    "stepNonMonotonic"))
+# 
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 5000,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_36.Rdata")
+
+
+# sim_VM <- function(PS_impact, n_obs){
+#   PS_link = "raw"
+#   if (PS_impact %in% c("flat", "linear", "quadraticSymmetric",
+#                        "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
+#   dataset <- gen_DS_modular(n_obs = n_obs, Y_impact = "paper", PS_function = "paper",
+#                             PS_impact = PS_impact, PS_link = PS_link, min_X = 0)
+#   polynomials <- c(0,1,2,3,4,5,6,7,8,9)
+#   polynomials_vec <- c()
+#   PS_scores <- list()
+#   PS_models <- list()
+#   for (i in polynomials){
+#     polynomials_vec <- c(polynomials_vec, i)
+#     PS <- Log_PS_pred(data = dataset, polynomials_vector = polynomials_vec)
+#     PS_scores <- append(PS_scores, list(PS))
+#     
+#     PS_model <- Log_PS_pred(data = dataset, polynomials_vector = polynomials_vec, return_Model = TRUE)
+#     PS_models <- append(PS_models, list(PS_model))
+#   }
+#   names(PS_scores) <- polynomials
+#   names(PS_models) <- polynomials
+#   
+#   #Trimming and calculating treatment effects in same loop
+#   datasets <- list()
+#   IPW_results <- list()
+#   NIPW_results <- list()
+#   IPW_VAR_results <-list()
+#   NIPW_VAR_results <-list()
+#   IPW_coverage <- list()
+#   NIPW_coverage <- list()
+#   
+#   quantiles_list <- lapply(PS_scores, stats::quantile, c(0.02,0.98))
+#   
+#   for (i in polynomials+1){
+#     indicator <- (PS_scores[[i]] > quantiles_list[[i]][[1]] & PS_scores[[i]] < quantiles_list[[i]][[2]])
+#     if(i>1){ #Because trimming is not working with a constant PS score
+#       datasets[[i]] <- dataset[indicator,]
+#       PS_scores[[i]] <- PS_scores[[i]][indicator]
+#     } else {
+#       datasets[[i]] <- dataset
+#       PS_scores[[i]] <- PS_scores[[i]]
+#     }
+#     IPW_results[[i]] <- IPW_fun(PS_est = PS_scores[[i]],dataset =  datasets[[i]])
+#     NIPW_results[[i]] <- NIPW_fun(PS_est = PS_scores[[i]], dataset = datasets[[i]])
+#     
+#     #Get variance
+#     IPW_VAR_results[[i]] <-  est_var_w_polynomials(
+#       dataset = datasets[[i]], PS_score = PS_scores[[i]], TE = IPW_results[[i]], poly_degree = i-1)
+#     NIPW_VAR_results[[i]] <-  est_var_w_polynomials(
+#       dataset = datasets[[i]], PS_score = PS_scores[[i]], TE = NIPW_results[[i]], poly_degree = i-1)
+#     
+#     #Get coverage ration
+#     CI <- est_confidence_interval(
+#       IPW_VAR_results[[i]], TE = IPW_results[[i]], N = nrow(dataset), confidence_level = 0.975)
+#     IPW_coverage[[i]] <- (CI[1]<=IPW_results[[i]] & CI[2] >= IPW_results[[i]])
+#     CI <- est_confidence_interval(
+#       NIPW_VAR_results[[i]], TE = NIPW_results[[i]], N = nrow(dataset), confidence_level = 0.975)
+#     NIPW_coverage[[i]] <- (CI[1]<=NIPW_results[[i]] & CI[2] >= NIPW_results[[i]])
+#   }
+#   
+#   #MISE & SUP
+#   MISEs <- lapply(PS_models, est_MISE, PS_impact = PS_impact, PS_link = PS_link)
+#   SUPs <- lapply(PS_models, est_SUP, PS_impact = PS_impact, PS_link = PS_link)
+#   
+#   names(IPW_results) <- paste0("IPW_w_poly", polynomials)
+#   names(NIPW_results) <- paste0("NIPW_w_poly", polynomials)
+#   names(IPW_VAR_results) <- paste0("IPW_VAR_w_poly", polynomials)
+#   names(NIPW_coverage) <- paste0("NIPW_coverage_w_poly", polynomials)
+#   names(IPW_coverage) <- paste0("IPW_coverage_w_poly", polynomials)
+#   names(NIPW_VAR_results) <- paste0("NIPW_VAR_w_poly", polynomials)
+#   names(MISEs) <- paste0("MISE_w_poly_", polynomials)
+#   names(SUPs) <- paste0("SUP_w_poly_", polynomials)
+#   estimates <- c(IPW_results, NIPW_results, MISEs, SUPs, NIPW_VAR_results, 
+#                  IPW_VAR_results, IPW_coverage, NIPW_coverage)
+#    return(estimates)
+# }
+# 
+# 
+# param_list <- list("n_obs" = c(1000),
+#                    "PS_impact" = c("flat", "linear", "quadraticSymmetric",
+#                                    "quadraticNonSymmetric", "fourthDegree",
+#                                    "peakSymmetric", "peakNonSymmetric", "stepMonotonic",
+#                                    "stepNonMonotonic"))
+# 
+# 
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 5000,
+#                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
+# save(sim_VM_result, file = "sim_VM_39.Rdata")
+
+
+sim_VM <- function(n_obs){
+  beta_PS = 1
+  beta_adjust_power_PS = 0
+  alpha_PS = -0.5
+  alpha_adjust_power_PS = 0
+  Y_impact = "highdim"
+  alpha_outcome = 0.01
+  X_dim = 1000
+  PS_function = "highdim"
+  X_impact_share_PS = 0.006
+  min_X = 0
+  dataset <- gen_DS_modular(n_obs = n_obs, X_dim = X_dim, PS_function = PS_function, 
+                            X_impact_share_PS = X_impact_share_PS, min_X = min_X, 
+                            beta_adjust_power_PS = beta_PS, beta_PS = beta_PS,
+                            alpha_adjust_power_PS = alpha_adjust_power_PS, alpha_PS = alpha_PS, 
+                            Y_impact = Y_impact, alpha_outcome = alpha_outcome)
   
-  dataset <- gen_DS_modular(
-    PS_impact = PS_impact, Y_impact = Y_impact, n_obs = n_obs,
-    X_dim = 10, X_impact_share_PS = 0.7, X_covar = 0.5, X_impact_share_Y = 0.7, 
-    X_impact_shift_percent = 0.3, adjust_beta_PS = TRUE, adjust_alpha_Y = TRUE)
-  #Check for excessive mean diff ins PS scores
-  mean_diff <- mean(dataset$PS[dataset$T == 1]) - mean(dataset$PS[dataset$T == 0])
-  PS_est <- c("true", "log", "probit", "ridgeInterPoly", "lassoInterPoly", 
-              "bayes_ridgeInterPoly", "bayes_lassoInterPoly", "rf", "nn")
-  Matching_estimators <- c("nn_one", "nnk", "stratum", "caliper_est", "cs")
+  PS_scores <- list()
+  PS_models <- list()
+  #####
+  #####
+  #Can speed up computation time by returning model and ps scores in a list in one function call instead of doint it seperately
+  PS_scores$lasso <- Lasso_PS_pred(data = dataset, include_interactions = FALSE, include_polynomials = FALSE)
+  PS_models$lasso <- Lasso_PS_pred(data = dataset, include_interactions = FALSE, include_polynomials = FALSE,
+                                   return_model = TRUE)
+  PS_scores$ridge <- Ridge_PS_pred(data = dataset, include_interactions = FALSE, include_polynomials = FALSE)
+  PS_models$ridge <- Ridge_PS_pred(data = dataset, include_interactions = FALSE, include_polynomials = FALSE,
+                                   return_model = TRUE)
   
-  if (mean_diff >= 0.25) {
-    combined_estimators <- c(apply(expand.grid(
-      PS_est, replace(
-        Matching_estimators, Matching_estimators == "caliper_est", "caliper"))[,c(2,1)], 1, base::paste0, collapse="_"), "DML")
-    bias = setNames(as.list(rep(9999, length(combined_estimators))), combined_estimators)
-  } else {
-    
-    PS_scores <- PS_estimators(dataset,
-                               estimators = PS_est,
-                               target_var = "T",
-                               vars_to_exclude = c("Y", "PS"))
-    matched_data <- matching_function(PS_scores = PS_scores,
-                                      dataset = dataset,
-                                      matching_estimators = Matching_estimators)
-    TE_effects <- estimate_TE(matched_data, data = dataset, include_DML = TRUE, include_SimpleReg = TRUE)
-    bias <- lapply(TE_effects, function(x) x - 1)
-  }
-  return(bias)
+  #Trimming and calculating treatment effects in same loop
+  datasets <- list()
+  IPW_results <- list()
+  NIPW_results <- list()
+  IPW_VAR_results <-list()
+  NIPW_VAR_results <-list()
+  IPW_coverage <- list()
+  NIPW_coverage <- list()
+  
+  quantiles_list <- lapply(PS_scores, stats::quantile, c(0.02,0.98))
+  indicator_lasso <- PS_scores$lasso > quantiles_list[[1]][[1]] & PS_scores$lasso < quantiles_list[[1]][[2]]
+  indicator_ridge <- PS_scores$ridge > quantiles_list[[2]][[1]] & PS_scores$ridge < quantiles_list[[2]][[2]]
+  datasets$lasso <- dataset[indicator_lasso,]
+  datasets$ridge <- dataset[indicator_ridge,]
+  PS_scores$lasso <- PS_scores$lasso[indicator_lasso]
+  PS_scores$ridge <- PS_scores$ridge[indicator_ridge]
+  
+  IPW_results$lasso <- IPW_fun(PS_est = PS_scores$lasso, dataset =  datasets$lasso)
+  IPW_results$ridge <- IPW_fun(PS_est = PS_scores$ridge, dataset =  datasets$ridge)
+  NIPW_results$lasso <- NIPW_fun(PS_est = PS_scores$lasso, dataset =  datasets$lasso)
+  NIPW_results$ridge <- NIPW_fun(PS_est = PS_scores$ridge, dataset =  datasets$ridge)
+  
+  
+  #Get variance
+  IPW_VAR_results$lasso <-  est_var(
+    dataset = datasets$lasso, PS_score = PS_scores$lasso, TE = IPW_results$lasso)
+  IPW_VAR_results$ridge <-  est_var(
+    dataset = datasets$ridge, PS_score = PS_scores$ridge, TE = IPW_results$ridge)
+  NIPW_VAR_results$lasso <-  est_var(
+    dataset = datasets$lasso, PS_score = PS_scores$lasso, TE = NIPW_results$lasso)
+  NIPW_VAR_results$ridge <-  est_var(
+    dataset = datasets$ridge, PS_score = PS_scores$ridge, TE = NIPW_results$ridge)
+  
+  #Get coverage ration
+  CI <- est_confidence_interval(
+    IPW_VAR_results$lasso, TE = IPW_results$lasso, N = nrow(dataset), confidence_level = 0.975)
+  IPW_coverage$lasso <- (CI[1]<=IPW_results$lasso & CI[2] >= IPW_results$lasso)
+  CI <- est_confidence_interval(
+    IPW_VAR_results$ridge, TE = IPW_results$ridge, N = nrow(dataset), confidence_level = 0.975)
+  IPW_coverage$ridge <- (CI[1]<=IPW_results$ridge & CI[2] >= IPW_results$ridge)
+  CI <- est_confidence_interval(
+    NIPW_VAR_results$lasso, TE = NIPW_results$lasso, N = nrow(dataset), confidence_level = 0.975)
+  NIPW_coverage$lasso <- (CI[1]<=NIPW_results$lasso & CI[2] >= NIPW_results$lasso)
+  CI <- est_confidence_interval(
+    NIPW_VAR_results$ridge, TE = NIPW_results$ridge, N = nrow(dataset), confidence_level = 0.975)
+  NIPW_coverage$ridge <- (CI[1]<=NIPW_results$ridge & CI[2] >= NIPW_results$ridge)
+  
+  
+  #MISE & SUP
+  MISEs <- lapply(PS_models, est_MISE, PSfun = "highdim", beta_adjust_power = beta_adjust_power_PS, beta = beta_PS,
+                  alpha_adjust_power = alpha_adjust_power_PS, alpha = alpha_PS, cols = X_dim, model_type = "lasso/ridge")
+  SUPs <- lapply(PS_models, est_SUP, PSfun = "highdim", beta_adjust_power = beta_adjust_power_PS, beta = beta_PS,
+                 alpha_adjust_power = alpha_adjust_power_PS, alpha = alpha_PS, cols = X_dim, model_type = "lasso/ridge")
+  
+  names(IPW_results) <- paste0("IPW_", names(IPW_results))
+  names(NIPW_results) <- paste0("NIPW_", names(IPW_results))
+  names(IPW_VAR_results) <- paste0("IPW_VAR_", names(IPW_VAR_results))
+  names(NIPW_coverage) <- paste0("NIPW_coverage_", names(NIPW_coverage))
+  names(IPW_coverage) <- paste0("IPW_coverage_", names(IPW_coverage))
+  names(NIPW_VAR_results) <- paste0("NIPW_VAR_", names(NIPW_VAR_results))
+  names(MISEs) <- paste0("MISE_", names(MISEs))
+  names(SUPs) <- paste0("SUP_", names(SUPs))
+  estimates <- c(IPW_results, NIPW_results, MISEs, SUPs, NIPW_VAR_results, 
+                 IPW_VAR_results, IPW_coverage, NIPW_coverage)
+  return(estimates)
 }
 
-param_list <- list("n_obs" = c(1000,3000),
-                   "DGP" = c( "quadratic_linear", "quadratic2_linear", "quadratic3_linear",
-                              "linear_quadratic", "quadratic_quadratic"))
 
-sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 25,
+param_list <- list("n_obs" = c(500, 1000, 1500, 2000, 5000))
+
+
+sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 5000,
                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
-save(sim_VM_result, file = "sim_VM_21.Rdata")
+save(sim_VM_result, file = "sim_VM_40.Rdata")

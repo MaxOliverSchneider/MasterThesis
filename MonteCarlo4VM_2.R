@@ -26,21 +26,12 @@ sim_VM <- function(DGP, n_obs){
   mean_diff <- mean(dataset$PS[dataset$T == 1]) - mean(dataset$PS[dataset$T == 0])
   PS_est <- c("true", "log", "probit", "ridgeNaive", "ridgeInterPoly", 
               "lassoNaive", "lassoInterPoly", "bayes_ridgeInterPoly", "bayes_lassoInterPoly", "rf", "nn")
-  Matching_estimators <- c("nn_one", "nnk", "stratum", "caliper_est", "cs")
-  
-  if (mean_diff >= 0.25) {
-    combined_estimators <- c(apply(expand.grid(
-      PS_est, replace(
-        Matching_estimators, Matching_estimators == "caliper_est", "caliper"))[,c(2,1)], 1, base::paste0, collapse="_"), "DML")
-    bias = setNames(as.list(rep(9999, length(combined_estimators))), combined_estimators)
-  } else {
-    
-    PS_scores <- PS_estimators(dataset,
+
+  PS_scores <- PS_estimators(dataset,
                                estimators = PS_est,
                                target_var = "T",
                                vars_to_exclude = c("Y", "PS"))
-    
-  }
+  results <- lapply(PS_scores, check_PS_pred_dist)
   return(bias)
 }
 

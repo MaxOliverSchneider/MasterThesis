@@ -411,37 +411,52 @@ gen_multiple_easy_DS <- function(n_obs = 500,
 
 gen_DS_modular <- function(n_obs = 500,
                            X_dim = 1,
-                           X_impact_share_PS = 1,
+                           X_dummy_share = 0,
+                           X_prob_dummy = 0.5,
+                           X_factor_share = 0,
                            X_covar = 0,
                            min_X = -1,
                            max_X = 1,
                            alpha_PS = 0,
+                           X_impact_share_PS = 1,
+                           X_impact_share_within = 1, 
                            beta_PS = 1,
                            beta_adjust_power_PS = 0.1,
+                           alpha_adjust_power_PS = 1,
                            adjust_beta_PS = FALSE,
+                           PS_function = "paper",
                            PS_link = "logit",
                            PS_impact = "linear",
                            to_interact_PS = list(c(1,2)),
                            PS_error = FALSE,
                            Y_impact = "linear",
                            X_impact_share_Y = 1,
-                           X_impact_shift_percent = 0,
+                           X_impact_shift_percent_Y = 0,
                            alpha_outcome = 1,
                            adjust_alpha_Y = FALSE, 
+                           alpha_adjust_power_Y = 0.5,
                            Y_error = FALSE,
                            min_Y_error = -1,
                            max_Y_error = 1,
                            treatment_effect = 1) {
   #Create variables
-  X = gen_X(n = X_dim, n_obs = n_obs, min = min_X, max = max_X, covar = X_covar)
+  X = gen_X(n = X_dim, n_obs = n_obs, min = min_X, max = max_X, covar = X_covar,
+            dummy_share = X_dummy_share, prob_dummy = X_prob_dummy,
+            factor_share = X_factor_share)
+  if (PS_function == "paper") {
+    PS = gen_PS_paper(X = X, beta_PS = beta_PS, impact_formula = PS_impact, link_type = PS_link)
+  } else if (PS_function == "highdim") {
+    PS = gen_PS_highDim(X = X, impact_share = X_impact_share_PS, beta = beta_PS, beta_adjust_power = adjust_beta_PS,
+                        alpha = alpha_PS, alpha_adjust_power = alpha_adjust_power_PS)
+  } else {
   PS = gen_PS(X = X, link_type = PS_link, X_impact_share = X_impact_share_PS, impact_formula = PS_impact,
               error = PS_error, alpha_PS = alpha_PS, beta_PS = beta_PS, adjust_beta = adjust_beta_PS, 
-              beta_adjust_power = beta_adjust_power_PS, to_interact = to_interact_PS)
+              beta_adjust_power = beta_adjust_power_PS, to_interact = to_interact_PS, impact_share_within = X_impact_share_within)}
   T = rbinom(n = n_obs, size = 1, prob = PS)
-  Y = gen_Y(X = X, T = T, X_impact_share = X_impact_share_Y, X_impact_shift_percent = X_impact_shift_percent, 
+  Y = gen_Y(X = X, T = T, X_impact_share = X_impact_share_Y, X_impact_shift_percent = X_impact_shift_percent_Y, 
             error = Y_error, min_error = min_Y_error, max_error = max_Y_error, 
             treatment_effect = treatment_effect, alpha_outcome = alpha_outcome, 
-            adjust_alpha = adjust_alpha_Y, impact_formula = Y_impact)
+            adjust_alpha = adjust_alpha_Y, impact_formula = Y_impact, alpha_adjust_power = alpha_adjust_power_Y)
   #Create dataset
   dataset = data.frame(X,PS,T,Y)
   dataset["OneVector"] = 1
@@ -535,29 +550,54 @@ probit_function <- function(PS_value){
 # Reusablefunctions for DGP
 ###
 
-gen_X <- function(n = 1, n_obs = 500, covar = 0, min = -1, max = 1) {
-  if (covar == 0 || n == 1) {
+gen_X <- function(n = 1, n_obs = 500, covar = 0, min = -1, max = 1,
+                  dummy_share = 0, X_dummy_shift_percent = 0, prob_dummy = 0.5,
+                  factor_share = 0) {
+  if (n == 1) {
     X = matrix(runif(n = n_obs * n, min = min, max = max), nrow = n_obs)
   } else {
     if((!covar==0) & (!(n%%2==0))) {print("If covar >0, n must be an even number")}
+    #Two matrices with ncol = n and nrow = n_obs each
     X = matrix(runif(n = n_obs * n, min = min, max = max), nrow = n_obs)
     X2 = matrix(runif(n = n_obs * n, min = min, max = max), nrow = n_obs)
+    #Indicators mark every second column, starting at first/second column
     indicator1 = seq(1, n, 2)
     indicator2 = seq(2, n, 2)
-    X[,indicator2] <- (1-covar) * X2[,indicator2] + covar * X[,indicator1]
+    #If covar > 0, every second column is (1-covar)*itself + covar * value of previous column
+    #Thereby creating pairwise correlations of columns 1&2, 3&4 and so on
+    if (covar > 0) {
+    X[,indicator2] <- (1-covar) * X2[,indicator2] + covar * X[,indicator1]}
+    
+    #If required, include dummies
+    #!Shift not implemented ye
+    if(dummy_share > 0) {
+      n_dummies <- ceiling(dummy_share * n)
+      
+      #shift_abs <- ceiling(n*X_dummy_shift_percent)
+      X_dummy <- matrix(rbinom(n = n_obs * n_dummies, size = 1, prob = prob_dummy), 
+                        nrow = n_obs)
+      X[,1:n_dummies] <- X_dummy
+    }
+    if(factor_share > 0) {
+      n_factors <- ceiling(factor_share*n)
+      X_factor <- matrix(sample(c(-1, -0.3, 0.3, 1), size = n_factors * n_obs, replace = TRUE),
+                         nrow = n_obs)
+      X[,1:n_factors] <- X_factor
+    }
   } 
   return(X)
 }
 
 gen_PS <- function(X, X_impact_share = 1, impact_formula = "linear", to_interact =list(c(1,2)),
-                   link_type = "logit", error = FALSE, alpha_PS = 0, 
+                   link_type = "logit", error = FALSE, alpha_PS = 0, impact_share_within = 1,
                    beta_PS = 1, adjust_beta = FALSE, beta_adjust_power = 0.35, min_error = -1, max_error = 1) 
   #beta_adjust_power determines the degree to which beta is adjusted to the dimension of X in order to control dispersion of the PS score
   {
   if (ncol(X) == 1) {
     PS_raw = beta_PS * X + alpha_PS
-    if (impact_formula == "quadratic") {PS_raw = 0.5 * (beta_PS * X + beta_PS * X^3)} 
-    else if (impact_formula == "non-linear") {PS_raw = reg_kink(X) * beta_PS }
+    if (impact_formula == "quadratic") {PS_raw = 0.5 * (beta_PS * X + beta_PS * X^3) + alpha_PS} 
+    else if (impact_formula == "non-linear") {PS_raw = reg_kink(X) * beta_PS + alpha_PS}
+    if(!impact_formula %in%(c("linear", "quadratic", "non-linear"))) {print("Attention: PS impact formula not because ncol(X) = 1")}
   } else {
     #If required, adjust beta
     if(adjust_beta){
@@ -597,9 +637,18 @@ gen_PS <- function(X, X_impact_share = 1, impact_formula = "linear", to_interact
       PS_raw = rowSums(beta_PS * t(t(reg_kink(X, a = 1.5, b = -2, c = 0)) * treatment_indicator)) + 
         alpha_PS 
     }
+    else if (impact_formula == "small_share"){
+      to_treat <- ceiling(sum(treatment_indicator) * impact_share_within)
+      treatments <- sample(c(
+        rep(1,to_treat), rep(0,sum(treatment_indicator)-to_treat)), 
+        replace = FALSE)
+      treatment_indicator[1:sum(treatment_indicator)] <- treatments
+      PS_raw = rowSums(beta_PS * t(t(X) * treatment_indicator)) + alpha_PS
+    }
+    #Here small impact share (randomly distributed vars with impact and impact strengths)
     else if (impact_formula == "interaction_mult"){
       #Might be problematic, since multiplication makes values smaller
-      X_impact <- t(t(reg_kink(X)) * treatment_indicator)
+      X_impact <- t(t(X) * treatment_indicator)
       interact_fun <- function(columns, X) {X[,columns[1]] * X[,columns[2]]}
       interacted_X <- lapply(to_interact, interact_fun, X_impact)
       interacted_X <- matrix(unlist(interacted_X), ncol = length(to_interact))
@@ -607,12 +656,75 @@ gen_PS <- function(X, X_impact_share = 1, impact_formula = "linear", to_interact
       PS_raw = rowSums(beta_PS * interacted_X) + alpha_PS
     }
     else if (impact_formula == "interaction_div"){
-      X_impact <- t(t(reg_kink(X)) * treatment_indicator)
+      #!!! Produces extreme values for PS score
+      X_impact <- t(t(X) * treatment_indicator)
       interact_fun <- function(columns, X) {X[,columns[1]] / X[,columns[2]]}
       interacted_X <- lapply(to_interact, interact_fun, X_impact)
       interacted_X <- matrix(unlist(interacted_X), ncol = length(to_interact))
       #Would need to write somethink to include X that have not been interacted still
       PS_raw = rowSums(beta_PS * interacted_X) + alpha_PS
+      #Should make sure values are not so extreme that NAs are produced
+      PS_raw = ifelse(PS_raw > 100, 100, ifelse(PS_raw < -100, -100, PS_raw))
+    }
+    else if (impact_formula == "conditional_interact_1"){
+      #Needs interaction lists of length 2
+      X_impact <- t(t(X) * treatment_indicator)
+      interact_fun <- function(columns, X, 
+                               small_factor = 0.5, large_factor = 1.5,
+                               small_threshhold = -1, large_thresshold = 0.15) {
+        ifelse((X[,columns[1]]>small_threshhold & X[,columns[1]]<large_thresshold) & 
+                 (X[,columns[2]]>small_threshhold & X[,columns[2]]<large_thresshold), 
+               small_factor*X[,columns[1]]*X[,columns[2]],
+               large_factor*X[,columns[1]]*X[,columns[2]])}
+      #Warning, this only works if there are at least to pairs of interaction terms, otherwise list with each element being a column is returned
+      interacted_X <- lapply(to_interact, interact_fun, X_impact)
+      interacted_X <- matrix(unlist(interacted_X), ncol = length(to_interact))
+      #Would need to write somethink to include X that have not been interacted still
+      PS_raw = rowSums(beta_PS * interacted_X) + alpha_PS
+    }
+    else if (impact_formula == "conditional_interact_2"){
+      #Needs interaction lists of length 2
+      X_impact <- t(t(X) * treatment_indicator)
+      interact_fun <- function(columns, X, 
+                               small_factor = 0.5, large_factor = -1.5,
+                               small_threshhold = -1, large_thresshold = 0) {
+        ifelse((X[,columns[2]]>small_threshhold & X[,columns[2]]<large_thresshold), 
+               small_factor*X[,columns[1]],
+               large_factor*X[,columns[1]])}
+      #Warning, this only works if there are at least to pairs of interaction terms, otherwise list with each element being a column is returned
+      interacted_X <- lapply(to_interact, interact_fun, X_impact)
+      interacted_X <- matrix(unlist(interacted_X), ncol = length(to_interact))
+      #Would need to write somethink to include X that have not been interacted still
+      PS_raw = rowSums(beta_PS * interacted_X) + alpha_PS}
+    else if (impact_formula == "conditional_interact_3"){
+      #Needs interaction lists of length 3
+      X_impact <- t(t(X) * treatment_indicator)
+      interact_fun <- function(columns, X, 
+                               small_factor = 0.5, large_factor = -1.5,
+                               small_threshhold = -1, large_thresshold = 0) {
+        ifelse((X[,columns[3]]>small_threshhold & X[,columns[3]]<large_thresshold), 
+               small_factor*X[,columns[1]]*X[,columns[2]],
+               large_factor*X[,columns[1]]*X[,columns[2]])}
+      #Warning, this only works if there are at least to pairs of interaction terms, otherwise list with each element being a column is returned
+      interacted_X <- lapply(to_interact, interact_fun, X_impact)
+      interacted_X <- matrix(unlist(interacted_X), ncol = length(to_interact))
+      #Would need to write somethink to include X that have not been interacted still
+      PS_raw = rowSums(beta_PS * interacted_X) + alpha_PS
+    }
+    else if (impact_formula == "range_assign"){
+      #Function that returns specific value if X lies in specific range
+      #Like 1 if -1<X-0.5, 2 if -0.5<X<0, ...
+      n_cuts =3 
+      threshhold = c(-0.4,0.5)
+      X_impact <- t(t(X) * treatment_indicator)
+      assign_fun <- function(X) {
+        #impact <- as.numeric(paste(round(runif(n = n_cuts, min = -3, max = 3), digits = 0), round(runif(n = n_cuts, min = 0, max = 9), digits = 0), sep = "."))
+        #Had to fix impact because the PS distribution was vaying too widely
+        impact <- c(-2,0.3,1.2)
+        ifelse(X<threshhold[1], impact[1], ifelse(X>threshhold[2], impact[2], impact[3]))
+      }
+      X_assigned <- apply(X_impact, 2, assign_fun)
+      PS_raw = rowSums(beta_PS * X_assigned) + alpha_PS
     }
   }
   if (link_type == "logit"){
@@ -624,9 +736,48 @@ gen_PS <- function(X, X_impact_share = 1, impact_formula = "linear", to_interact
   return(PS)
 }
 
+gen_PS_paper <- function(X, 
+                     beta_PS = 1, 
+                     impact_formula = "flat", 
+                     link_type = "logit"){
+  #First, I'll implement it for the univariate case
+  if (impact_formula == "flat"){PS_raw <- rep(0, times = nrow(X))}
+  if (impact_formula == "linear"){PS_raw <- (beta_PS/ncol(X)) * (-3 * ncol(X) + rowSums(6 * X))}
+  if (impact_formula == "quadraticSymmetric"){PS_raw <- 2.5 - (2.5*(1-rowSums(2*X)))^2}
+  if (impact_formula == "quadraticNonSymmetric"){PS_raw <- 2.5 - (2.5*(1-rowSums(1.5*X)))^2}
+  if (impact_formula == "fourthDegree"){PS_raw <- -2.5 + rowSums(4.5 * X^4)}
+  if (impact_formula == "peakSymmetric"){
+    PS_raw <- ifelse(X<0.5, 0.05 + 1.8*X, 1.85 - 1.8*X)}
+  if (impact_formula == "peakNonSymmetric") {
+    PS_raw <- ifelse(X<0.8, 0.05 + 1.125*X, 4.55 - 4.5*X)}
+  if (impact_formula == "stepMonotonic"){
+    PS_raw <- ifelse(X<0.33, 0.33, ifelse(X>0.67, 0.67, 0.5))}
+  if (impact_formula == "stepNonMonotonic"){
+    PS_raw <- ifelse(X<0.33, 0.5, ifelse(X>0.67, 0.1, 0.9))}
+  
+  if (link_type == "raw") {PS <- PS_raw}
+  if (link_type == "logit"){
+    PS = exp(PS_raw)/(exp(PS_raw) + 1)
+  }
+  else if (link_type == "probit") {
+    PS = unlist(lapply(PS_raw, probit_function))
+  }
+  return(PS)
+}
+
+gen_PS_highDim <- function(X, impact_share, beta = 6, beta_adjust_power = 1, alpha = -3, alpha_adjust_power = 1){
+  N_treat <- ceiling(ncol(X) * impact_share)
+  beta <- beta/(N_treat^beta_adjust_power)
+  alpha <- alpha/(N_treat^alpha_adjust_power)
+  X_impact <- matrix(X[,1:N_treat], ncol = N_treat)
+  PS_raw <- alpha * N_treat + beta * rowSums(X_impact)
+  PS <- exp(PS_raw)/(exp(PS_raw)+1)
+  return(PS)
+}
+
 gen_Y <- function(X, T, X_impact_share = 1, X_impact_shift_percent = 0, error = FALSE, 
                   min_error = -1, max_error = 1, treatment_effect = 1, alpha_outcome = 1, 
-                  adjust_alpha = FALSE, impact_formula = "linear") {
+                  adjust_alpha = FALSE, impact_formula = "linear", alpha_adjust_power = 0.5) {
   if (ncol(X) > 1) {
   n_treat = ceiling(ncol(X)*X_impact_share)
   X_impact_shift_abs <- ceiling(X_impact_shift_percent * ncol(X))
@@ -638,7 +789,7 @@ gen_Y <- function(X, T, X_impact_share = 1, X_impact_shift_percent = 0, error = 
   
   #If required, adjust beta
   if(adjust_alpha){
-    adjust_factor = ceiling((ncol(X)*X_impact_share)^0.5)
+    adjust_factor = (ncol(X)*X_impact_share)^alpha_adjust_power
     alpha_outcome = alpha_outcome/(adjust_factor)}
   
   if(error) {
@@ -656,7 +807,18 @@ gen_Y <- function(X, T, X_impact_share = 1, X_impact_shift_percent = 0, error = 
   } else if (impact_formula == "heterogeneous") {
     alpha_outcome <- ifelse(T, alpha_outcome, 0.5*alpha_outcome)
     Y = treatment_effect * T + alpha_outcome * rowSums(t(t(X)*treatment_indicator)) + y_error
+  } else if (impact_formula == "paper") {
+    Y = 2.54 - 
+      (1.67 * T) - 
+      (2.47 * rowSums(X)) + 
+      (1.96 * T * rowSums(X)) + 
+      rnorm(n =  nrow(X), mean =  0, sd = 0.25)
+  } else if (impact_formula == "highdim") {
+    Y = 2.54 - 
+      (1.67 * T) - 
+      (2.47 * rowSums(X)) * alpha_outcome + 
+      (1.96 * T * rowSums(X)) * alpha_outcome + 
+      rnorm(n =  nrow(X), mean =  0, sd = 0.25)
   }
-  
   return(Y)
 }

@@ -22,6 +22,9 @@ plot_PS_density <- function(dataset, title = "PS Density Plot", subtitle = "") {
 ###
 # Plot distribution of bias for one specific set-up starting with sim_VM_result
 ###
+#Use like: 
+#plot_bias_dist(sim_result = sim_VM_result, PS_impact_p = "PS_impact=flat", 
+# estimators = c("NIPW_log", "NIPW_true", "IPW_log", "IPW_true", "nn_one_log"))
 #summary(sim_VM_result)
 plot_bias_dist <- function(sim_result, 
                            type = "boxplot", # boxplot or density function available,
@@ -30,6 +33,7 @@ plot_bias_dist <- function(sim_result,
                            beta_PS_p = 0,
                            DGP_p = "DGP=normal",
                            PS_link_p = "PS_link=logit",
+                           PS_impact_p = "PS_impact=linear",
                            X_impact_share_p = 1, 
                            X_dim_p = 1, 
                            estimators = NA){
@@ -42,16 +46,19 @@ plot_bias_dist <- function(sim_result,
   } else {est <- estimators}
   
   
+  
   #Create graph, need to manually input all parameters with more than one option and
   #filter appropriate one
   data_long_subset <- data_long[data_long$estimators %in% est,] %>%
     {if("alpha_PS" %in% params) filter(., alpha_PS %in% alpha_PS_p) else . } %>%
+    {if("PS_impact" %in% params) filter(., PS_impact %in% PS_impact_p) else . } %>%
     {if("X_impact_share" %in% params) filter(., X_impact_share == X_impact_share_p) else . } %>%
     {if("DGP" %in% params) filter(., DGP == DGP_p) else . } %>%
     {if("PS_link" %in% params) filter(., PS_link == PS_link_p) else . } %>%
     {if("X_dim" %in% params) filter(., X_dim == X_dim_p) else . } %>%
     {if("cor_X" %in% params) filter(., cor_X == cor_X_p) else .}
-  
+  means <- aggregate(value ~  estimators, data_long_subset, mean)
+  means[,2] <- round(means[,2], digits = 3)
   #Finally create plot
   #Density functions
   if(type == "density"){
@@ -63,9 +70,14 @@ plot_bias_dist <- function(sim_result,
   if(type=="boxplot"){
     ggplot(data = data_long_subset, aes(x=estimators, y=value)) +
       geom_boxplot()+
-      coord_flip()}
+      stat_summary(fun=mean, colour="darkred", geom="point", 
+                   shape=18, size=3, show.legend=TRUE) +
+      coord_flip() +
+      geom_text(data = means, aes(label = value))}
 }
 
+#Plot PS against X
+# ggplot(data = data.frame(PS,X1), aes(x=X1, y=PS)) + geom_line()
 
 ####
 # NOT WORKING since the param value is a string
@@ -102,11 +114,12 @@ plot_PS_pre <- function(dataset, PS_score, title) {
   data = data.frame(cbind(dataset$PS, PS_score, dataset$T))
   RMSE = round((mean((data[,1]-data[,2])^2))^0.5, digits = 2)
   MAE = round(mean(abs(data[,1] - data[,2])), digits = 2)
+  COR = round(cor(data[,1], data[,2]), digits = 3)
   colnames(data) = c("True", "Estimated", "Treatment")
   ggplot(data = data, aes(x = True, y = Estimated, colour = Treatment)) + 
     geom_point() + 
-    ggtitle(paste0("Estimator: ", title, "; RMSE: ", RMSE, "; MAE: ", MAE)) +
-    theme(legend.position="none")
+    ggtitle(paste0(title, "; RMSE: ", RMSE, "; MAE: ", MAE, "; COR: ", COR)) +
+    theme(legend.position="none", plot.title = element_text(size=6.5))
 }
 
 plot_PS_estimator_performance <- function(dataset, PS_scores) {
@@ -125,7 +138,7 @@ plot_PS_predict_boxplot <- function(PS_scores){
     geom_boxplot()+
     coord_flip()
 }
-  
+
 
 ###
 # Testing all PS estimators
@@ -142,7 +155,7 @@ plot_PS_predict_boxplot <- function(PS_scores){
 #                            estimators = c("true", "rf",
 #                                           "bayes_ridge", "bayes_lasso", "bayes_horseshoe", "bayes_horseshoePlus", "nn"))
 # 
-output = plot_PS_estimator_performance(dataset = dataset, PS_scores = PS_scores)
-do.call("grid.arrange", c(output, top = "test")) 
+# output = plot_PS_estimator_performance(dataset = dataset, PS_scores = PS_scores)
+# do.call("grid.arrange", c(output, top = "test")) 
 
 
