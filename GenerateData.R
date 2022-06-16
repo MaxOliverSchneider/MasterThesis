@@ -417,12 +417,12 @@ gen_DS_modular <- function(n_obs = 500,
                            X_covar = 0,
                            min_X = -1,
                            max_X = 1,
-                           alpha_PS = 0,
+                           alpha_PS = 1,
                            X_impact_share_PS = 1,
                            X_impact_share_within = 1, 
                            beta_PS = 1,
-                           beta_adjust_power_PS = 0.1,
-                           alpha_adjust_power_PS = 1,
+                           beta_adjust_power_PS = 0,
+                           alpha_adjust_power_PS = 0,
                            adjust_beta_PS = FALSE,
                            PS_function = "paper",
                            PS_link = "logit",
@@ -444,7 +444,10 @@ gen_DS_modular <- function(n_obs = 500,
             dummy_share = X_dummy_share, prob_dummy = X_prob_dummy,
             factor_share = X_factor_share)
   if (PS_function == "paper") {
-    PS = gen_PS_paper(X = X, beta_PS = beta_PS, impact_formula = PS_impact, link_type = PS_link)
+    PS = gen_PS_paper(X = X, impact_share = X_impact_share_PS, beta = beta_PS, beta_adjust_power = beta_adjust_power_PS,
+                      alpha = alpha_PS, alpha_adjust_power = alpha_adjust_power_PS, impact_formula = PS_impact, link_type = PS_link)
+  } else if (PS_function == "paperold") {
+    PS = gen_PS_paper_old(X = X,beta = beta_PS, impact_formula = PS_impact, link_type = PS_link)
   } else if (PS_function == "highdim") {
     PS = gen_PS_highDim(X = X, impact_share = X_impact_share_PS, beta = beta_PS, beta_adjust_power = adjust_beta_PS,
                         alpha = alpha_PS, alpha_adjust_power = alpha_adjust_power_PS)
@@ -736,10 +739,11 @@ gen_PS <- function(X, X_impact_share = 1, impact_formula = "linear", to_interact
   return(PS)
 }
 
-gen_PS_paper <- function(X, 
-                     beta_PS = 1, 
-                     impact_formula = "flat", 
-                     link_type = "logit"){
+gen_PS_paper_old <- function(X, 
+                         beta_PS = 1, 
+                         impact_formula = "flat", 
+                         link_type = "logit"
+                         ){
   #First, I'll implement it for the univariate case
   if (impact_formula == "flat"){PS_raw <- rep(0, times = nrow(X))}
   if (impact_formula == "linear"){PS_raw <- (beta_PS/ncol(X)) * (-3 * ncol(X) + rowSums(6 * X))}
@@ -764,6 +768,81 @@ gen_PS_paper <- function(X,
   }
   return(PS)
 }
+
+gen_PS_paper <- function(X, 
+                     beta = 1, 
+                     beta_adjust_power = 0,
+                     alpha = 1,
+                     alpha_adjust_power = 0,
+                     impact_share = 1, 
+                     impact_formula = "flat", 
+                     link_type = "logit"){
+  
+  N_treat <- ceiling(ncol(X) * impact_share) #No of X with impact
+  beta <- beta/(N_treat^beta_adjust_power) #
+  alpha <- alpha/(N_treat^alpha_adjust_power)
+  X_impact <- matrix(X[,1:N_treat], ncol = N_treat)
+  if (impact_formula == "flat"){PS_raw <- rep(0, times = nrow(X))}
+  if (impact_formula == "linear"){PS_raw <- 1/N_treat* rowSums(-3 + 6 * X_impact)} 
+  #Alpha*N_treat usually cancel out, but for now keep it, since might be useful for tweaking ...
+    #PS_raw <- (beta_PS/ncol(X)) * (-3 * ncol(X) + rowSums(6 * X))}
+  #PS_raw <- 2.5 - (2.5*(1-rowSums(2*X)))^2}
+  if (impact_formula == "quadraticSymmetric"){PS_raw <- alpha * (1/N_treat)*rowSums(2.5 - (2.5*(1-2*beta*X_impact))^2)}
+  if (impact_formula == "quadraticNonSymmetric"){PS_raw <- alpha * (1/N_treat)*rowSums(2.5 - (2.5*(1-1.5*beta*X_impact))^2) }
+  # PS_raw <- -2.5 + rowSums(4.5 * X^4)
+  if (impact_formula == "fourthDegree"){PS_raw <- alpha * (1/N_treat)*(-2.5 + rowSums(4.5 * beta * X_impact^4))}
+  #Wouldnt it be better like this? PS_raw <- -2.5 + rowSums(4.5*(1/N_treat)*X_impact^4)
+  if (impact_formula == "peakSymmetric"){
+    thresshold_value <- rowSums(X_impact) - N_treat * 0.5 + 0.5
+    # PS_raw <- ifelse(thresshold_value < 0.5, 
+    #                  0.05 + 1.8*(rowSums(X_impact) *beta - (N_treat-1) * alpha * 0.5), 
+    #                  1.85 - 1.8*(rowSums(X_impact) *beta - (N_treat-1) * alpha * 0.5))
+    # PS_raw <- ifelse(thresshold_value < 0.5, 
+    #                  0.05 + 1.8*(rowSums(X_impact)-(1/N_treat-1)*0.5) * 1/N_treat, 
+    #                  1.85 - 1.8*(rowSums(X_impact)-(1/N_treat-1)*0.5) * 1/N_treat)
+    PS_raw <- ifelse(thresshold_value < 0.5, 
+                     0.05 + 1.8*(rowSums(X_impact)) * 1/N_treat, 
+                     1.85 - 1.8*(rowSums(X_impact)) * 1/N_treat)}
+  #Need to really think through all formulas again, here subtracted 1 from N-treat, since we don't want to substract 0.5 in case of N_treat = 1
+  #And this also holds for N-treat>1, we need to subtract one less *0.5
+  
+  if (impact_formula == "peakNonSymmetric") {
+    thresshold_value <- rowSums(X_impact) - N_treat * 0.5 + 0.5
+    if(ncol(X_impact>1)){
+    percentiles <- quantile(thresshold_value, 0.8)} else{percentiles = c(0.8)}
+    normalizer <- ifelse(percentiles>1,N_treat/percentiles[[1]],N_treat)
+    PS_raw <- ifelse(thresshold_value<percentiles[[1]],
+                     0.05 + 1.125*(rowSums(X_impact)) *1/normalizer,
+                     4.55 - 4.5*(rowSums(X_impact)) * 1/(normalizer))}
+  #hist(PS_raw[thresshold_value>percentiles[[1]]])
+  if (impact_formula == "stepMonotonic"){
+    thresshold_value <- rowSums(X_impact) - N_treat * 0.5 + 0.5
+    if(ncol(X_impact>1)){
+    percentiles <- quantile(thresshold_value, c(0.33,0.67))} else{percentiles <- c(0.33,0.67)}
+    PS_raw <- ifelse(thresshold_value<percentiles[[1]], 0.33, 
+                     ifelse(thresshold_value>percentiles[[2]], 0.67, 0.5))}
+  if (impact_formula == "stepNonMonotonic"){
+    thresshold_value <- rowSums(X_impact) - N_treat * 0.5 + 0.5
+    if(ncol(X_impact>1)){
+    percentiles <- quantile(thresshold_value, c(0.33,0.67))} else {percentiles <- c(0.33,0.67)}
+    PS_raw <- ifelse(thresshold_value<percentiles[[1]], 0.5, 
+                     ifelse(thresshold_value>percentiles[[2]], 0.1, 0.9))}
+
+  
+  if (link_type == "raw") {PS <- PS_raw}
+  if (link_type == "logit"){
+    PS = exp(PS_raw)/(exp(PS_raw) + 1)
+  }
+  else if (link_type == "probit") {
+    PS = unlist(lapply(PS_raw, probit_function))
+  }
+  #Normalize PS score in case there are values <0, or >1
+  #Will need to look at distributions of ps scores in more detail
+  PS <- ifelse(PS>1,1,ifelse(PS<0,0,PS))
+  return(PS)
+}
+
+
 
 gen_PS_highDim <- function(X, impact_share, beta = 6, beta_adjust_power = 1, alpha = -3, alpha_adjust_power = 1){
   N_treat <- ceiling(ncol(X) * impact_share)
@@ -814,10 +893,11 @@ gen_Y <- function(X, T, X_impact_share = 1, X_impact_shift_percent = 0, error = 
       (1.96 * T * rowSums(X)) + 
       rnorm(n =  nrow(X), mean =  0, sd = 0.25)
   } else if (impact_formula == "highdim") {
+    N_treat = ceiling(ncol(X)*X_impact_share)
     Y = 2.54 - 
       (1.67 * T) - 
       (2.47 * rowSums(X)) * alpha_outcome + 
-      (1.96 * T * rowSums(X)) * alpha_outcome + 
+      (1.96 * T * rowSums(as.matrix(X[,1:N_treat]))) * alpha_outcome + 
       rnorm(n =  nrow(X), mean =  0, sd = 0.25)
   }
   return(Y)

@@ -1,7 +1,7 @@
 scripts = c("Graphs.R") 
 invisible(lapply(paste0(getwd(), "/", scripts), source))
 
-simNoToLoad <- "38"
+simNoToLoad <- "48"
 load(paste0("~/Master/FS 21/MA/Frölich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
 
 summary(sim_VM_result)
@@ -10,7 +10,7 @@ params = names(sim_VM_result$param_list)
 #Create output with means
 MakeTable(output=sim_VM_result, rows="list",
           cols=c(params), digits=2, include_meta=FALSE)
-MakeTable(output=sim_VM_result, rows=c("list", "n_obs"),
+MakeTable(output=sim_VM_result, rows=c("X_impact_share_Y", "list"),
           cols="PS_impact", digits=2, include_meta=FALSE)
 
 #Create output with standard deviations
@@ -21,6 +21,7 @@ no_estimators <- length(sim_VM_result[[1]])
 
 #Subtract one to obtain bias
 sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x+0.69)
+sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x-8.13)
 #Multiply by 1000 to get better magnitude
 sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x*1000)
 #Get absolute value for mean absolute bias

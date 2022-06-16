@@ -23,8 +23,9 @@ plot_PS_density <- function(dataset, title = "PS Density Plot", subtitle = "") {
 # Plot distribution of bias for one specific set-up starting with sim_VM_result
 ###
 #Use like: 
-#plot_bias_dist(sim_result = sim_VM_result, PS_impact_p = "PS_impact=flat", 
-# estimators = c("NIPW_log", "NIPW_true", "IPW_log", "IPW_true", "nn_one_log"))
+#plot_bias_dist(sim_result = sim_VM_result, PS_impact_p = "PS_impact=stepNonMonotonic",
+#estimators = c("NIPW_log", "NIPW_true", "IPW_log", "IPW_true", "nn_one_log"))
+#estimators_contain = "IPW_w_poly")
 #summary(sim_VM_result)
 plot_bias_dist <- function(sim_result, 
                            type = "boxplot", # boxplot or density function available,
@@ -36,13 +37,17 @@ plot_bias_dist <- function(sim_result,
                            PS_impact_p = "PS_impact=linear",
                            X_impact_share_p = 1, 
                            X_dim_p = 1, 
-                           estimators = NA){
+                           estimators = NA,
+                           estimators_contain = NA){
   params <- names(sim_result$param_list)
-  data <- MakeFrame(sim_VM_result)
+  data <- MakeFrame(sim_result)
   data_long <- data.frame(melt(setDT(data), id.vars = params, variable.name = "estimators"))
   
   if(is.na(estimators)) {
     est <- as.vector(unique(data_long$estimators))
+    if (!is.na(estimators_contain)){
+      est <- as.vector(unique(data_long$estimators))[as.vector(unique(data_long$estimators)) %like% estimators_contain]
+    }
   } else {est <- estimators}
   
   
@@ -70,10 +75,11 @@ plot_bias_dist <- function(sim_result,
   if(type=="boxplot"){
     ggplot(data = data_long_subset, aes(x=estimators, y=value)) +
       geom_boxplot()+
-      stat_summary(fun=mean, colour="darkred", geom="point", 
-                   shape=18, size=3, show.legend=TRUE) +
-      coord_flip() +
-      geom_text(data = means, aes(label = value))}
+      # stat_summary(fun=mean, colour="darkred", geom="point", 
+      #              shape=18, size=3, show.legend=TRUE) +
+      coord_flip() #+
+      #geom_text(data = means, aes(label = value))}
+  }
 }
 
 #Plot PS against X

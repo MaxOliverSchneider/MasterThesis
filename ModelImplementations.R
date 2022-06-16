@@ -261,7 +261,7 @@ LassoNaive_PS_pred <- function(data,
   drop_vars <- c(target_var, vars_to_exclude)
   X <- as.matrix(data[,!names(data) %in% drop_vars])
   T <- as.matrix(data[,target_var])
-  cv.lasso <- cv.glmnet(x = X, y = T, alpha = 1, family = family, nfolds = 5)
+  cv.lasso <- cv.glmnet(x = X, y = T, alpha = 1, family = family, nfolds = 10)
   log_lasso_reg <- glmnet(x = X, y = T, family = "binomial", alpha = 1, lambda = cv.lasso$lambda.min) 
   PS_pred_lasso <- as.vector(predict(object = log_lasso_reg, newx = X, type = "response"))
   return(PS_pred_lasso)
@@ -270,27 +270,43 @@ LassoNaive_PS_pred <- function(data,
 Lasso_PS_pred <- function(data, 
                           target_var = "T", 
                           include_interactions = TRUE,
-                          include_polynomials = TRUE,
+                          polynomials_vector = NA,
                           vars_to_exclude = c("Y", "PS"), 
                           family = "binomial",
-                          return_model = FALSE) {
+                          return_modelAndPS = FALSE) {
   drop_vars <- c(target_var, vars_to_exclude)
   raw_X <- as.matrix(data[,!names(data) %in% drop_vars])
+  regressors <- colnames(raw_X)[colnames(raw_X)!="OneVector"]
   X = raw_X
+  
+  #This has to be before the interactions part, since X is overwritten here
+  if (!is.na(polynomials_vector)) {
+    polynomials <- matrix(nrow = nrow(raw_X), ncol = 0)
+    for (i in polynomials_vector){
+      polynomials <- cbind(polynomials,raw_X[,regressors]^i)}
+    colnames(polynomials) <- paste0(colnames(polynomials), "squared", rep(polynomials_vector, each = length(regressors)))
+    X <- polynomials}
+  
   if (include_interactions & (ncol(raw_X) > 2)) {
     interactions <- model.matrix( ~.^2, data=data.frame(raw_X[,-ncol(raw_X)]))[,-c(1:ncol(raw_X))]
     X <- cbind(X, interactions)}
-  if (include_polynomials) {
-    polynomials <- raw_X^2 
-    colnames(polynomials) <- paste0(colnames(polynomials), "_squared")
-    X <- cbind(X, polynomials[,-ncol(raw_X)])}#Drop last column bc. of "oneVector"
+  
+  
   X <- as.matrix(X)
   
   T <- as.matrix(data[,target_var])
+  if (sum(sum(polynomials_vector)>0 | is.na(polynomials_vector))>0) {
   cv.lasso <- cv.glmnet(x = X, y = T, alpha = 1, family = family, nfolds = 5)
   log_lasso_reg <- glmnet(x = X, y = T, family = "binomial", alpha = 1, lambda = cv.lasso$lambda.min) 
+  marker <- "lasso/ridge"
   PS_pred_lasso <- as.vector(predict(object = log_lasso_reg, newx = X, type = "response"))
-  if(return_model){PS_pred_lasso = log_lasso_reg}
+  #Add marker so that MISE and SUP functions know which model to use (For log is already added in log function)
+  log_lasso_reg <- list(log_lasso_reg, marker)} else {
+    #Introduce log model in case of zero polynomial because lasso doesn't work with only constants
+    PS_pred_lasso <- rep(mean(as.numeric(data$T))-1, nrow(data))
+    log_lasso_reg <- Log_PS_pred(data = data, polynomials_vector = c(0), return_Model = TRUE)
+  }
+  if(return_modelAndPS){PS_pred_lasso <- list(PS_pred_lasso, log_lasso_reg)}
   return(PS_pred_lasso)
 }
 
@@ -300,7 +316,7 @@ Ridge_PS_pred <- function(data,
                           include_polynomials = TRUE,
                           vars_to_exclude = c("Y", "PS"), 
                           family = "binomial",
-                          return_model = FALSE) {
+                          return_modelAndPS = FALSE) {
   drop_vars <- c(target_var, vars_to_exclude)
   raw_X <- as.matrix(data[,!names(data) %in% drop_vars])
   X = raw_X
@@ -317,7 +333,7 @@ Ridge_PS_pred <- function(data,
   cv.ridge <- cv.glmnet(x = X, y = T, alpha = 0, family = family, nfolds = 5)
   log_ridge_reg <- glmnet(x = X, y = T, family = "binomial", alpha = 0, lambda = cv.ridge$lambda.min) 
   PS_pred_ridge <- as.vector(predict(object = log_ridge_reg, newx = X, type = "response"))
-  if (return_model){PS_pred_ridge <- log_ridge_reg}
+  if(return_modelAndPS){PS_pred_ridge <- list(PS_pred_ridge, log_ridge_reg)}
   return(PS_pred_ridge)
 }
 
@@ -335,7 +351,7 @@ Log_PS_pred <- function(data,
   f <- paste(target_var, "~", paste(regressors, collapse = "+"))
   log_reg <- glm(f, data = data, family = binomial(link = "logit"))
   PS_pred_log <- as.vector(predict.glm(object = log_reg, newdata = data, type = "response"))
-  if (return_Model){PS_pred_log <- log_reg}
+  if (return_Model){PS_pred_log <- list(log_reg, "marker" = "log")}
   return(PS_pred_log)
 }
 
@@ -415,6 +431,7 @@ NIPW_fun <- function(PS_est, dataset){
   first_term <- sum((Y*T)/PS_est) / sum(T/PS_est)
   second_term <- sum((Y*(1-T))/(1-PS_est)) / sum((1-T)/(1-PS_est))
   TE <- first_term - second_term
+  return(TE)
 }
 
 ###
@@ -561,6 +578,24 @@ est_var <- function(dataset, PS_score, TE){
   V_est <- (1/N)*sum((pheta_vec+alpha_vec)^2)
   return(V_est)
 }
+###
+# NOt working
+### Unsure about usage of matrix notation
+
+# est_var_multiDim <- function(dataset, PS_score, TE){
+#   T <- as.numeric(dataset$T)-1
+#   Y <- dataset$Y
+#   X <- as.matrix(dataset[,1:(ncol(dataset)-4)])
+#   N <- nrow(dataset)
+#   pheta_vec <- ((Y*T)/PS_score) - ((Y*(1-T))/(1-PS_score)) - TE
+#   #alpha_part_one <- t((1/N)*sum((((Y*T)/PS_score^2) + ((Y*(1-T))/((1-PS_score)^2)))%*%as.matrix(X)))
+#   alpha_part_one <- t((1/N)*(((Y*T)/PS_score^2) + ((Y*(1-T))/((1-PS_score)^2)))%*%X)
+#   alpha_part_two <- (1/N)*(X%*%t(X))
+#   alpha_part_three <- X*(T-PS_score)
+#   alpha_vec <- -1*(alpha_part_one%/%alpha_part_two) * alpha_part_three
+#   V_est <- (1/N)*sum((pheta_vec+alpha_vec)^2)
+#   return(V_est)
+# }
 
 est_var_w_polynomials <- function(dataset, PS_score, TE, poly_degree = 1){
   T <- as.numeric(dataset$T)-1
@@ -591,22 +626,30 @@ est_confidence_interval <- function(var_est, TE, N, confidence_level = 0.975){
 # Estimate MISE
 ###
 est_MISE <- function(PS_model_est, PS_impact = "linear", PS_link ="logit", cols = 1,  model_type = "logit", PSfun = "paper",
-                     impact_share = 1, beta = 6, beta_adjust_power = 0,
-                     alpha = -3, alpha_adjust_power = 0){
+                     impact_share = 1, beta = 1, beta_adjust_power = 0,
+                     alpha = 1, alpha_adjust_power = 0){
   M = 100
-  grid <- data.frame(matrix(rep(seq(0,1,0.01), cols), ncol = cols), rep(1,M+1))
+  browser()
+  marker = PS_model_est[[2]]
+  if (cols == "automatic" & marker == "lasso/ridge") {cols = length(PS_model_est[[1]]$beta)-1} #Assumes PS_model also has marker attached
+  if (cols == "automatic" & marker == "log") {cols = length(PS_model_est[[1]]$coefficients)-1}
+  PS_model_est = PS_model_est[[1]]
+  grid <- data.frame(matrix(rep(seq(0,1,0.01), cols), ncol = cols), rep(1,M+1)) #Also adding the "OneVector", which is dropped later
   numbers <- seq(1,cols,1)
   colnames(grid) <- c(paste0("X", numbers), "OneVector")
-  if (model_type == "logit"){
+  
+  if (model_type == "logit" | marker == "log"){
     PS_pred_est <- predict.glm(PS_model_est, newdata = grid, type = "response")
   } else if (model_type == "lasso/ridge"){
     PS_pred_est <- as.vector(predict(object = PS_model_est, newx = as.matrix(grid), type = "response"))
   }
   if (PSfun == "paper"){
-    PS_pred_true <- gen_PS_paper(X = as.matrix(grid[,-cols-1]), impact_formula = PS_impact, link_type = PS_link)
-  } else if (PSfun == "highdim")
+    PS_pred_true <- gen_PS_paper(X = as.matrix(grid[,-cols-1]), impact_formula = PS_impact, link_type = PS_link,
+                                 impact_share = impact_share, beta_adjust_power = beta_adjust_power, 
+                                 alpha = alpha, alpha_adjust_power = alpha_adjust_power)
+  } else if (PSfun == "highdim") {
     PS_pred_true <- gen_PS_highDim(X = as.matrix(grid[,-cols-1]), impact_share = impact_share, beta = beta,
-                                   beta_adjust_power = beta_adjust_power, alpha = alpha, alpha_adjust_power = alpha_adjust_power)
+                                   beta_adjust_power = beta_adjust_power, alpha = alpha, alpha_adjust_power = alpha_adjust_power)}
   
   MISE <- (1/M) * sum((PS_pred_est-PS_pred_true)^2)
   return(MISE)
@@ -616,19 +659,25 @@ est_MISE <- function(PS_model_est, PS_impact = "linear", PS_link ="logit", cols 
                      impact_share = 1, beta = 6, beta_adjust_power = 0,
                      alpha = -3, alpha_adjust_power = 0){
    M = 100
-   grid <- data.frame(matrix(rep(seq(0,1,0.01), cols), ncol = cols), rep(1,M+1))
+   marker = PS_model_est[[2]]
+   if (cols == "automatic" & marker == "lasso/ridge") {cols = length(PS_model_est[[1]]$beta)-1} #Assumes PS_model also has marker attached
+   if (cols == "automatic" & marker == "log") {cols = length(PS_model_est[[1]]$coefficients)-1}
+   PS_model_est = PS_model_est[[1]]
+   grid <- data.frame(matrix(rep(seq(0,1,0.01), cols), ncol = cols), rep(1,M+1)) #Also adding the "OneVector", which is dropped later
    numbers <- seq(1,cols,1)
    colnames(grid) <- c(paste0("X", numbers), "OneVector")
-   if (model_type == "logit"){
+   if (model_type == "logit" | marker == "log"){
      PS_pred_est <- predict.glm(PS_model_est, newdata = grid, type = "response")
    } else if (model_type == "lasso/ridge"){
      PS_pred_est <- as.vector(predict(object = PS_model_est, newx = as.matrix(grid), type = "response"))
    }
    if (PSfun == "paper"){
-     PS_pred_true <- gen_PS_paper(X = as.matrix(grid[,-cols-1]), impact_formula = PS_impact, link_type = PS_link)
-   } else if (PSfun == "highdim")
+     PS_pred_true <- gen_PS_paper(X = as.matrix(grid[,-cols-1]), impact_formula = PS_impact, link_type = PS_link,
+                                  impact_share = impact_share, beta_adjust_power = beta_adjust_power, 
+                                  alpha = alpha, alpha_adjust_power = alpha_adjust_power)
+   } else if (PSfun == "highdim") {
      PS_pred_true <- gen_PS_highDim(X = as.matrix(grid[,-cols-1]), impact_share = impact_share, beta = beta,
-                                    beta_adjust_power = beta_adjust_power, alpha = alpha, alpha_adjust_power = alpha_adjust_power)
+                                    beta_adjust_power = beta_adjust_power, alpha = alpha, alpha_adjust_power = alpha_adjust_power)}
    
    SUP <- max(abs(PS_pred_est-PS_pred_true))
    return(SUP)
