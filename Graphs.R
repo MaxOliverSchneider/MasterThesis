@@ -23,7 +23,7 @@ plot_PS_density <- function(dataset, title = "PS Density Plot", subtitle = "") {
 # Plot distribution of bias for one specific set-up starting with sim_VM_result
 ###
 #Use like: 
-#plot_bias_dist(sim_result = sim_VM_result, PS_impact_p = "PS_impact=stepNonMonotonic",
+#plot_bias_dist(sim_result = sim_VM_result, PS_formula_p = "PS_impact=stepNonMonotonic",
 #estimators = c("NIPW_log", "NIPW_true", "IPW_log", "IPW_true", "nn_one_log"))
 #estimators_contain = "IPW_w_poly")
 #summary(sim_VM_result)
@@ -34,7 +34,7 @@ plot_bias_dist <- function(sim_result,
                            beta_PS_p = 0,
                            DGP_p = "DGP=normal",
                            PS_link_p = "PS_link=logit",
-                           PS_impact_p = "PS_impact=linear",
+                           PS_formula_p = "PS_impact=linear",
                            X_impact_share_p = 1, 
                            X_dim_p = 1, 
                            estimators = NA,
@@ -56,7 +56,7 @@ plot_bias_dist <- function(sim_result,
   #filter appropriate one
   data_long_subset <- data_long[data_long$estimators %in% est,] %>%
     {if("alpha_PS" %in% params) filter(., alpha_PS %in% alpha_PS_p) else . } %>%
-    {if("PS_impact" %in% params) filter(., PS_impact %in% PS_impact_p) else . } %>%
+    {if("PS_formula" %in% params) filter(., PS_formula %in% PS_formula_p) else . } %>%
     {if("X_impact_share" %in% params) filter(., X_impact_share == X_impact_share_p) else . } %>%
     {if("DGP" %in% params) filter(., DGP == DGP_p) else . } %>%
     {if("PS_link" %in% params) filter(., PS_link == PS_link_p) else . } %>%
@@ -75,6 +75,7 @@ plot_bias_dist <- function(sim_result,
   if(type=="boxplot"){
     ggplot(data = data_long_subset, aes(x=estimators, y=value)) +
       geom_boxplot()+
+      ggtitle(PS_formula_p)+
       # stat_summary(fun=mean, colour="darkred", geom="point", 
       #              shape=18, size=3, show.legend=TRUE) +
       coord_flip() #+

@@ -1,8 +1,8 @@
 scripts = c("Graphs.R") 
 invisible(lapply(paste0(getwd(), "/", scripts), source))
 
-simNoToLoad <- "48"
-load(paste0("~/Master/FS 21/MA/Frölich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
+simNoToLoad <- "49_2"
+load(paste0("~/Master/FS 21/MA/FrÃ¶lich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
 
 summary(sim_VM_result)
 params = names(sim_VM_result$param_list)

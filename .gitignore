@@ -13,3 +13,4 @@ dump*.rda
 images/
 test.tex
 .rda
+*.png
