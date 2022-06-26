@@ -18,9 +18,11 @@ gen_DS_modular <- function(n_obs = 1000,
                            min_X = 0,
                            max_X = 1,
                            X_impact_share_PS = 1,
+                           X_impact_shift_PS = 0,
                            PS_link = "logit",
                            PS_formula = "linear",
                            X_impact_share_Y = 1,
+                           X_impact_shift_Y = 0,
                            adjust_alpha_Y = "X_dim") {
   #Create covariates
   X = gen_X(n = X_dim,
@@ -31,6 +33,7 @@ gen_DS_modular <- function(n_obs = 1000,
   #Calculate propensity scores
   PS <- gen_PS(X = X,
                impact_share = X_impact_share_PS,
+               impact_shift = X_impact_shift_PS,
                impact_formula = PS_formula,
                link_type = PS_link)
   
@@ -39,7 +42,8 @@ gen_DS_modular <- function(n_obs = 1000,
   
   #Generate outcomes, based on X and T
   Y = gen_Y(X = X, T = T, 
-            X_impact_share = X_impact_share_Y, 
+            impact_share = X_impact_share_Y, 
+            impact_shift = X_impact_shift_Y,
             adjust_alpha = adjust_alpha_Y)
   
   #Combine variables in one dataset
@@ -72,27 +76,26 @@ gen_X <- function(n = 1, n_obs = 1000, min = 0, max = 1) {
 # impact_share determines number of covariates that have an impact on the PS
 # link_type determines the link function used to transform the "raw" PS 
 gen_PS <- function(X, 
-                   impact_share = 1, 
+                   impact_share = 1,
+                   impact_shift = 0,
                    impact_formula = "linear", 
                    link_type = "logit"){
-  browser()
   #Subset columns of covariates with impact on the PS
+  N_shift <- ceiling(ncol(X) * impact_shift) #Share of vars that do not have an impact (from left)
   N_treat <- ceiling(ncol(X) * impact_share) #No of X with impact
-  X_impact <- as.matrix(X[,1:N_treat], ncol = N_treat)
+  X_impact <- as.matrix(X[,(1+N_shift):(N_treat+N_shift)], ncol = N_treat)
   
   #Link from X to raw value of PS that will (potentially) transformed by logit/probit link function in next step
   if (impact_formula == "flat"){PS_raw <- rep(0, times = nrow(X))
   } else if (impact_formula == "linear"){
-    PS_raw <- 1/N_treat* rowSums(-3 + 6 * X_impact)
-  } else if (impact_formula == "testing") {
-    PS_raw <- 1/N_treat * (-0.5 + (rowSums(X_impact^2)))
+    PS_raw <- 1/N_treat* rowSums(-3 + 6 * X_impact) #Stimmt mit paper überein(-3 wird auf jede Spalte angewandt)
   } else if (impact_formula == "quadraticSymmetric"){
     PS_raw <- (1/N_treat)*rowSums(2.5 - (2.5*(1-2*X_impact))^2)
   } else if (impact_formula == "quadraticNonSymmetric"){
-    PS_raw <-(1/N_treat)*rowSums(2.5 - (2.5*(1-1.5*X_impact))^2) 
+    PS_raw <-(1/N_treat)*rowSums(2.5 - (2.5*(1-1.5*X_impact))^2) #Stimmt auch mit paper überein
   } else if (impact_formula == "fourthDegree"){
     PS_raw <- (1/N_treat)*(-2.5 + rowSums(4.5 * X_impact^4))
-    #Wouldnt it be better like this? PS_raw <- -2.5 + rowSums(4.5*(1/N_treat)*X_impact^4)
+    #Tested other specification, that did not work very well: 1:(1/N_treat)*rowSums(-2.5 + 4.5 * X_impact^4); 2:-2.5 + rowSums(4.5*(1/N_treat)*X_impact^4)
   } else if (impact_formula == "peakSymmetric"){
     thresshold_value <- rowSums(X_impact) - N_treat * 0.5 + 0.5
     PS_raw <- ifelse(thresshold_value < 0.5, 
@@ -142,18 +145,22 @@ gen_PS <- function(X,
 #   (usually default normalizes by number of covariates)
 
 gen_Y <- function(X, T, 
-                  X_impact_share = 1, 
+                  impact_share = 1, 
+                  impact_shift = 0,
                   adjust_alpha = "X_dim") {
+  
+  
+  
+  #Determine number of covariates that have an impact on the outcome 
+  N_shift <- ceiling(ncol(X) * impact_shift) #Share of vars that do not have an impact (from left)
+  N_treat <- ceiling(ncol(X) * impact_share) #No of X with impact
+  X_impact <- as.matrix(X[,(1+N_shift):(N_treat+N_shift)], ncol = N_treat)
   
   #Adjust factor by which X as impact on Y directly and in interaction with T
   if (adjust_alpha == "X_dim"){
-  alpha = 1/ncol(X)} else {
-    alpha = 1/adjust_alpha
-  }
-  
-  #Determine number of covariates that have an impact on the outcome 
-  N_treat = ceiling(ncol(X)*X_impact_share)
-  X_impact = as.matrix(X[,1:N_treat])
+    alpha = 1/ncol(X_impact)} else {
+      alpha = 1/adjust_alpha
+    }
   
   #Create error term
   error = rnorm(n =  nrow(X), mean =  0, sd = 0.5) #Changed from 0.25 to 0.5

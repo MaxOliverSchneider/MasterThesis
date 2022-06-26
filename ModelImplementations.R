@@ -140,3 +140,50 @@ NIPW_fun <- function(PS_est, dataset){
   TE <- first_term - second_term
   return(TE)
 }
+
+Kernel_fun <- function(dataset, PS_est, bandwidth){
+  #Subset data
+  treat_indicator <- dataset$T==1
+  treat <- dataset[treat_indicator,]
+  Ntreat <- dataset[!treat_indicator,]
+  Ntreat_PS <- PS_est[!treat_indicator]
+  
+  #Get weight, given PS and kernel
+  get_weight <- function(PS, kernel_dist) {
+    pointer <- which.min(abs(kernel_dist$x - PS))
+    weight <- kernel_dist$y[pointer]
+    return(weight)
+  }
+  
+  # Get weighted outcomes given an indicator of observations that lie within min/max of kernel
+  # and the actual kernel
+  get_weighted_outcome <- function(indicator, kernel_dist){
+    weights <- unlist(lapply(Ntreat_PS[indicator], 
+                             get_weight, 
+                             kernel_dist = kernel_dist))
+    weighted_outcome <- sum(weights * Ntreat[indicator,]$Y)/sum(weights)
+    #Is this correct, to just divide by the sum of weights?
+    return(weighted_outcome)
+  }
+  
+  #Get list of kernels for all estimated PS values of treated obsersvations
+  kernels <- lapply(PS_est[treat_indicator], density, bw = bandwidth, kernel = "gaussian")
+  
+  #Get list of indicators of whether non_treated PS score lies within boundaries of kernel
+  kernel_indicators <- lapply(kernels, function(x) (Ntreat_PS > min(x$x) &
+                                                      Ntreat_PS < max(x$x)))
+  
+  #Get weighted outcomes for each treated observations and its associated indicator and kernel
+  weighted_outcomes <-  mapply(get_weighted_outcome, 
+                               kernel_indicators, 
+                               kernels, 
+                               SIMPLIFY = TRUE)
+  
+  #Take mean of differences between treatment outcomes and and weighted outcomes for each observation
+  diffs <- treat$Y - weighted_outcomes
+  diffs <- diffs[!is.na(diffs)]
+  TE <- mean(diffs)
+  return(TE)
+  #Probably could be simplified by including kernel_indicators function in in 
+  #"get_weighted_outcome" function
+}

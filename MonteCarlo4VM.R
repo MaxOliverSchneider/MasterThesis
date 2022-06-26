@@ -45,12 +45,30 @@ sim_VM <- function(PS_formula, n_obs){
   NIPW_VAR_results <-list()
   IPW_coverage <- list()
   NIPW_coverage <- list()
+  Kernel_002 <- list()
+  Kernel_010 <- list()
+  Kernel_025 <- list()
+  Kernel_050 <- list()
 
 
   quantiles_list <- lapply(PS_scores, stats::quantile, c(0.02,0.98))
   
   for (i in polynomials+1){
-    indicator <- (PS_scores[[i]] > quantiles_list[[i]][[1]] & PS_scores[[i]] < quantiles_list[[i]][[2]])
+    
+    #indicator <- (PS_scores[[i]] > quantiles_list[[i]][[1]] & PS_scores[[i]] < quantiles_list[[i]][[2]])
+    
+    ###
+    #ATTENTION
+    ####
+    
+    #Get indicator from true PS
+    if (PS_formula != "flat"){
+    indicator <- stats::quantile(dataset$PS, c(0.02,0.98))} else {indicator = rep(TRUE, nrow(dataset))}
+    
+    ####
+    ####
+    ###
+    
     if(i>1){ #Because trimming is not working with a constant PS score
       datasets[[i]] <- dataset[indicator,]
       PS_scores[[i]] <- PS_scores[[i]][indicator]
@@ -60,23 +78,36 @@ sim_VM <- function(PS_formula, n_obs){
     }  
     IPW_results[[i]] <- IPW_fun(PS_est = PS_scores[[i]],dataset =  datasets[[i]])
     NIPW_results[[i]] <- NIPW_fun(PS_est = PS_scores[[i]], dataset = datasets[[i]])
+    Kernel_002[[i]] <- Kernel_fun(dataset = datasets[[i]], PS_est = PS_scores[[i]],
+                                  bandwidth = 0.02)
+    Kernel_010[[i]] <- Kernel_fun(dataset = datasets[[i]], PS_est = PS_scores[[i]],
+                                  bandwidth = 0.10)
+    Kernel_025[[i]] <- Kernel_fun(dataset = datasets[[i]], PS_est = PS_scores[[i]],
+                                  bandwidth = 0.25)
+    Kernel_050[[i]] <- Kernel_fun(dataset = datasets[[i]], PS_est = PS_scores[[i]],
+                                  bandwidth = 0.50)
     
   }
-  IPW_MSEover1k <- lapply(IPW_results, function(x) ifelse(((x+0.69)^2)>1000,1,0))
-  NIPW_MSEover1k <- lapply(NIPW_results, function(x) ifelse(((x+0.69)^2)>1000,1,0))
 
   #MISE & SUP
   MISEs <- lapply(PS_models, est_MISE, PS_formula = PS_formula, PS_link = PS_link, cols =1)
   SUPs <- lapply(PS_models, est_SUP, PS_formula = PS_formula, PS_link = PS_link, cols =1)
-
+  
+  
   names(IPW_results) <- paste0("IPW_w_poly", polynomials)
   names(NIPW_results) <- paste0("NIPW_w_poly", polynomials)
-  names(IPW_MSEover1k) <- paste0("IPW_w_poly_exceed", polynomials)
-  names(NIPW_MSEover1k) <- paste0("NIPW_w_poly_exceed", polynomials)
+  names(Kernel_002) <- paste0("Kernel_bw002_w_poly", polynomials)
+  names(Kernel_010) <- paste0("Kernel_bw010_w_poly", polynomials)
+  names(Kernel_025) <- paste0("Kernel_bw025_w_poly", polynomials)
+  names(Kernel_050) <- paste0("Kernel_bw050_w_poly", polynomials)
+  # names(IPW_MSEover1k) <- paste0("IPW_w_poly_exceed", polynomials)
+  # names(NIPW_MSEover1k) <- paste0("NIPW_w_poly_exceed", polynomials)
   names(MISEs) <- paste0("MISE_w_poly_", polynomials)
   names(SUPs) <- paste0("SUP_w_poly_", polynomials)
   
-  estimates <- c(IPW_results, NIPW_results, MISEs, SUPs, IPW_MSEover1k, NIPW_MSEover1k)
+  estimates <- c(IPW_results, NIPW_results, 
+                 Kernel_002, Kernel_010, Kernel_025, Kernel_050,
+                 MISEs, SUPs)
   
   return(estimates)
 }
@@ -88,12 +119,12 @@ param_list <- list("n_obs" = c(1000),
                                    "peakSymmetric", "peakNonSymmetric", "stepMonotonic",
                                    "stepNonMonotonic"))
 
-# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 2,
-#                                    param_list = param_list, time_n_test = FALSE), write.error.dump.file = TRUE)
+sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 1,
+                                   param_list = param_list, time_n_test = FALSE), write.error.dump.file = TRUE)
 
-sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 1500,
+sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 500,
                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
-save(sim_VM_result, file = "sim_VM_49.Rdata")
+save(sim_VM_result, file = "sim_VM_51.Rdata")
 
 
 # sim_VM <- function(n_obs){

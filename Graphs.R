@@ -76,6 +76,7 @@ plot_bias_dist <- function(sim_result,
     ggplot(data = data_long_subset, aes(x=estimators, y=value)) +
       geom_boxplot()+
       ggtitle(PS_formula_p)+
+      geom_hline(yintercept = -0.69, colour = "red") +
       # stat_summary(fun=mean, colour="darkred", geom="point", 
       #              shape=18, size=3, show.legend=TRUE) +
       coord_flip() #+

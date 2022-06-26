@@ -1,7 +1,7 @@
 scripts = c("Graphs.R") 
 invisible(lapply(paste0(getwd(), "/", scripts), source))
 
-simNoToLoad <- "49_2"
+simNoToLoad <- "49"
 load(paste0("~/Master/FS 21/MA/Frölich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
 
 summary(sim_VM_result)
@@ -10,7 +10,7 @@ params = names(sim_VM_result$param_list)
 #Create output with means
 MakeTable(output=sim_VM_result, rows="list",
           cols=c(params), digits=2, include_meta=FALSE)
-MakeTable(output=sim_VM_result, rows=c("X_impact_share_Y", "list"),
+MakeTable(output=sim_VM_result, rows=c("X_dim", "list"),
           cols="PS_impact", digits=2, include_meta=FALSE)
 
 #Create output with standard deviations
