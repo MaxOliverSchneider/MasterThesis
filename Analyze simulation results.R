@@ -1,7 +1,7 @@
 scripts = c("Graphs.R") 
 invisible(lapply(paste0(getwd(), "/", scripts), source))
 
-simNoToLoad <- "49"
+simNoToLoad <- "56"
 load(paste0("~/Master/FS 21/MA/Frölich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
 
 summary(sim_VM_result)
@@ -10,8 +10,8 @@ params = names(sim_VM_result$param_list)
 #Create output with means
 MakeTable(output=sim_VM_result, rows="list",
           cols=c(params), digits=2, include_meta=FALSE)
-MakeTable(output=sim_VM_result, rows=c("X_dim", "list"),
-          cols="PS_impact", digits=2, include_meta=FALSE)
+MakeTable(output=sim_VM_result, rows=c("list"),
+          cols=c("XImpact", "cor", "PS_formula"), digits=2, include_meta=FALSE)
 
 #Create output with standard deviations
 #Need to set number of estimators
@@ -19,9 +19,11 @@ no_estimators <- length(sim_VM_result[[1]])
 
 
 
-#Subtract one to obtain bias
+#Add 0.69 to obtain bias
 sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x+0.69)
-sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x-8.13)
+#Subtract 1.27 in three-dimensional case, 0.29 in two-dimensional case
+sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x-1.27)
+sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x-0.29)
 #Multiply by 1000 to get better magnitude
 sim_VM_result[[1]] <- lapply(sim_VM_result[[1]], function(x) x*1000)
 #Get absolute value for mean absolute bias

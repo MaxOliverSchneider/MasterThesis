@@ -23,12 +23,17 @@ gen_DS_modular <- function(n_obs = 1000,
                            PS_formula = "linear",
                            X_impact_share_Y = 1,
                            X_impact_shift_Y = 0,
-                           adjust_alpha_Y = "X_dim") {
+                           adjust_alpha_Y = "X_dim",
+                           adjust_standard_deviation_Y = "X_dim") {
   #Create covariates
-  X = gen_X(n = X_dim,
-            n_obs = n_obs,
-            min = min_X,
-            max = max_X)
+  if(X_dim == "correlated") {
+    X = gen_X_cor(n_obs = n_obs)
+  } else if (is.numeric(X_dim)){
+    X = gen_X(n = X_dim,
+              n_obs = n_obs,
+              min = min_X,
+              max = max_X)
+  }
   
   #Calculate propensity scores
   PS <- gen_PS(X = X,
@@ -44,7 +49,8 @@ gen_DS_modular <- function(n_obs = 1000,
   Y = gen_Y(X = X, T = T, 
             impact_share = X_impact_share_Y, 
             impact_shift = X_impact_shift_Y,
-            adjust_alpha = adjust_alpha_Y)
+            adjust_alpha = adjust_alpha_Y,
+            adjust_standard_deviation = adjust_standard_deviation_Y)
   
   #Combine variables in one dataset
   dataset = data.frame(X,PS,T,Y)
@@ -68,6 +74,15 @@ gen_DS_modular <- function(n_obs = 1000,
 gen_X <- function(n = 1, n_obs = 1000, min = 0, max = 1) {
   X = matrix(runif(n = n_obs * n, min = min, max = max), nrow = n_obs)
   return(X)
+}
+
+gen_X_cor <- function(n=3, n_obs = 1000){
+  sigma <- matrix(c(1, 0.3, 0.1,
+                    0.3, 1, 0.5,
+                    0.1, 0.5, 1), 3, 3, byrow =TRUE)
+  X_normalDist <- mvrnorm(n = n_obs, mu = rep(0,3), Sigma = sigma)
+  X_uniformDist <- pnorm(X_normalDist)
+  return(matrix(X_uniformDist, nrow = n_obs))
 }
 
 ###
@@ -147,7 +162,8 @@ gen_PS <- function(X,
 gen_Y <- function(X, T, 
                   impact_share = 1, 
                   impact_shift = 0,
-                  adjust_alpha = "X_dim") {
+                  adjust_alpha = "X_dim",
+                  adjust_standard_deviation = "X_dim") {
   
   
   
@@ -158,12 +174,20 @@ gen_Y <- function(X, T,
   
   #Adjust factor by which X as impact on Y directly and in interaction with T
   if (adjust_alpha == "X_dim"){
-    alpha = 1/ncol(X_impact)} else {
+    alpha = 1/N_treat
+    } else if (is.numeric(adjust_alpha)){
       alpha = 1/adjust_alpha
     }
   
+  #Adjusting standard deviation of error term in outcome equation to numbers of vars having an impact on Y
+  if (adjust_standard_deviation == "X_dim"){
+    standard_deviation = 0.5 * N_treat
+  } else if (is.numeric(adjust_standard_deviation)){
+    standard_deviation = 1 * adjust_standard_deviation
+  }
+  
   #Create error term
-  error = rnorm(n =  nrow(X), mean =  0, sd = 0.5) #Changed from 0.25 to 0.5
+  error = rnorm(n =  nrow(X), mean =  0, sd = standard_deviation) #Changed from 0.25 to 0.5
   
   #Outcome formula as specified in Millimet & Tchernis paper
   #but multiplying with alpha to normalize impact on Y

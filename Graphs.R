@@ -35,6 +35,8 @@ plot_bias_dist <- function(sim_result,
                            DGP_p = "DGP=normal",
                            PS_link_p = "PS_link=logit",
                            PS_formula_p = "PS_impact=linear",
+                           XImpact_p = "full",
+                           cor_p = "nonCorrelated",
                            X_impact_share_p = 1, 
                            X_dim_p = 1, 
                            estimators = NA,
@@ -56,6 +58,8 @@ plot_bias_dist <- function(sim_result,
   #filter appropriate one
   data_long_subset <- data_long[data_long$estimators %in% est,] %>%
     {if("alpha_PS" %in% params) filter(., alpha_PS %in% alpha_PS_p) else . } %>%
+    {if("Ximpact" %in% params) filter(., XImpact %in% XImpact_p) else .} %>%
+    {if("cor" %in% params) filter(., cor %in% cor_p) else .} %>%
     {if("PS_formula" %in% params) filter(., PS_formula %in% PS_formula_p) else . } %>%
     {if("X_impact_share" %in% params) filter(., X_impact_share == X_impact_share_p) else . } %>%
     {if("DGP" %in% params) filter(., DGP == DGP_p) else . } %>%

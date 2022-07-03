@@ -84,15 +84,29 @@ Lasso_PS_pred <- function(data,
 
 Log_PS_pred <- function(data,
                         polynomials_vector = NA,
+                        interaction_terms = NA,
                         target_var = "T",
                         vars_to_exclude = c("Y", "PS"),
                         return_Model = FALSE) {
   #Determine vars to drop
   drop_vars <- c(target_var, vars_to_exclude)
-  regressors <- names(data)[!names(data) %in% drop_vars]
+  regressors_raw <- names(data)[!names(data) %in% drop_vars]
+  regressors <- regressors_raw
   if(!is.na(polynomials_vector)){
-    regressors <- regressors[regressors!="OneVector"]
-    regressors <- c(paste0("I(",regressors,"^",polynomials_vector,")"),"OneVector")
+    regressors <- regressors_raw[regressors_raw!="OneVector"]
+    regressors <- c(paste0("I(",rep(regressors, each = length(polynomials_vector)),"^",polynomials_vector,")"),"OneVector")
+  }
+  if(!is.na(interaction_terms)) {
+    interactions <- regressors_raw[regressors_raw!="OneVector"]
+    #Drop interactions of same variables: 
+    polyToInteract <- paste0("I(",rep(interactions, each = length(interaction_terms)),"^",interaction_terms,")")
+    interactions <- combn(polyToInteract, m = 2)
+    interactions <- paste0(interactions[1,],":",interactions[2,])
+    #Drop all interactions between diferent polynomials of the same variable
+    indicator <- unlist(lapply(interactions, function (x) 
+      substr(strsplit(x, split = ":")[[1]][[1]], 1,4) == substr(strsplit(x, split = ":")[[1]][[2]], 1,4) ))
+    interactions <- interactions[!indicator]
+    regressors <- c(regressors, interactions)
   }
   f <- paste(target_var, "~", paste(regressors, collapse = "+"))
   log_reg <- glm(f, data = data, family = binomial(link = "logit"))
@@ -100,6 +114,7 @@ Log_PS_pred <- function(data,
   if (return_Model){PS_pred_log <- list(PS_pred_log, list(log_reg, "marker" = "log"))}
   return(PS_pred_log)
 }
+
 
 Probit_PS_pred <- function(data, 
                            target_var = "T",
@@ -186,4 +201,16 @@ Kernel_fun <- function(dataset, PS_est, bandwidth){
   return(TE)
   #Probably could be simplified by including kernel_indicators function in in 
   #"get_weighted_outcome" function
+}
+
+#Enforcing overlap by trimming all observations with
+# estimated PS smaller than smallest estimated PS of treatment group and
+# estimated PS larger than biggest estimated PS of non-treated group
+enforce_overlap <- function(dataset, PS_est){
+  treated <- dataset$T == 1
+  Ntreated <- dataset$T == 0
+  min_PS_T <- min(PS_est[treated])
+  max_PS_NT <- max(PS_est[Ntreated])
+  indicator <- PS_est>min_PS_T & PS_est < max_PS_NT
+  return(indicator)
 }
