@@ -26,10 +26,14 @@ plot_PS_density <- function(dataset, title = "PS Density Plot", subtitle = "") {
 #plot_bias_dist(sim_result = sim_VM_result, PS_formula_p = "PS_impact=stepNonMonotonic",
 #estimators = c("NIPW_log", "NIPW_true", "IPW_log", "IPW_true", "nn_one_log"))
 #estimators_contain = "IPW_w_poly")
+#Numeric variables like n_obs need to be given numeric and not as string, i.e. n_obs_p = 500
+#All parameters, ven those with just one option, need to be included in the function call
 #summary(sim_VM_result)
 plot_bias_dist <- function(sim_result, 
                            type = "boxplot", # boxplot or density function available,
+                           xlim_adjust = "automatic", 
                            cor_X_p = 0,
+                           n_obs_p = 1000,
                            alpha_PS_p = 0,
                            beta_PS_p = 0,
                            DGP_p = "DGP=normal",
@@ -37,10 +41,16 @@ plot_bias_dist <- function(sim_result,
                            PS_formula_p = "PS_impact=linear",
                            XImpact_p = "full",
                            cor_p = "nonCorrelated",
-                           X_impact_share_p = 1, 
+                           impact_share_p = 0.002,
+                           X_impact_share_p = 1,
+                           penalty_p = 1,
                            X_dim_p = 1, 
+                           red_line = -0.69,
                            estimators = NA,
                            estimators_contain = NA){
+  if(xlim_adjust == "automatic"){
+    xlim = c(red_line-abs(red_line),red_line+abs(red_line))
+  } else {xlim = xlim_adjust}
   params <- names(sim_result$param_list)
   data <- MakeFrame(sim_result)
   data_long <- data.frame(melt(setDT(data), id.vars = params, variable.name = "estimators"))
@@ -58,11 +68,14 @@ plot_bias_dist <- function(sim_result,
   #filter appropriate one
   data_long_subset <- data_long[data_long$estimators %in% est,] %>%
     {if("alpha_PS" %in% params) filter(., alpha_PS %in% alpha_PS_p) else . } %>%
-    {if("Ximpact" %in% params) filter(., XImpact %in% XImpact_p) else .} %>%
+    {if("XImpact" %in% params) filter(., XImpact %in% XImpact_p) else .} %>%
     {if("cor" %in% params) filter(., cor %in% cor_p) else .} %>%
+    {if("impact_share" %in% params) filter(., impact_share %in% impact_share_p) else .} %>%
+    {if("penalty" %in% params) filter(., penalty %in% penalty_p) else .} %>%
     {if("PS_formula" %in% params) filter(., PS_formula %in% PS_formula_p) else . } %>%
     {if("X_impact_share" %in% params) filter(., X_impact_share == X_impact_share_p) else . } %>%
     {if("DGP" %in% params) filter(., DGP == DGP_p) else . } %>%
+    {if("n_obs" %in% params) filter(., n_obs == n_obs_p) else . } %>%
     {if("PS_link" %in% params) filter(., PS_link == PS_link_p) else . } %>%
     {if("X_dim" %in% params) filter(., X_dim == X_dim_p) else . } %>%
     {if("cor_X" %in% params) filter(., cor_X == cor_X_p) else .}
@@ -71,20 +84,35 @@ plot_bias_dist <- function(sim_result,
   #Finally create plot
   #Density functions
   if(type == "density"){
+    # graph <- ggplot(data_long_subset, mapping = aes(x = value, color = estimators)) +
+    #   xlim(xlim) +
+    #   ggtitle(as.character(penalty_p)) +
+    #   geom_vline(xintercept = red_line, colour = "red") +
+    #   geom_density(size = 2)
+    # print(graph)}
     graph <- ggplot(data_long_subset, mapping = aes(x = value, color = estimators)) +
-      geom_density()
-    print(graph)}
+      geom_density(size = 1.3) +
+      xlim(xlim) +
+      #ggtitle(paste0("DGP: ", PS_formula_p)) +
+      ggtitle(paste0("DGP: ", DGP_p)) +
+      #ggtitle(paste0("Penalty: ", as.character(penalty_p))) +
+      #ggtitle(paste0("N_Obs ", as.character(n_obs_p))) +
+      geom_vline(xintercept = red_line, colour = "red") 
+    print(graph)
+    }
   
   #Boxplot
   if(type=="boxplot"){
-    ggplot(data = data_long_subset, aes(x=estimators, y=value)) +
+    graph <- ggplot(data = data_long_subset, aes(x=estimators, y=value)) +
       geom_boxplot()+
-      ggtitle(PS_formula_p)+
-      geom_hline(yintercept = -0.69, colour = "red") +
+      ggtitle(paste0("DGP: ", DGP_p)) +
+      #ggtitle(PS_formula_p)+
+      geom_hline(yintercept = red_line, colour = "red") +
       # stat_summary(fun=mean, colour="darkred", geom="point", 
       #              shape=18, size=3, show.legend=TRUE) +
       coord_flip() #+
       #geom_text(data = means, aes(label = value))}
+    print(graph)
   }
 }
 

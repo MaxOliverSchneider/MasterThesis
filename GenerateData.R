@@ -11,7 +11,7 @@ lapply(packages, require, character.only = TRUE)
 # (2) calculating the propensity score based on these covariates
 # (3) calculating the outcome based on covariates and treatment
 #Default parameters are set for univariate DGP in linear setting from Milliment & Tchernis (2009) paper
-#(Some of the parameters might be "legace" parameters in that they are not used in any of the final settings I am using)
+#(Some of the parameters might be "legacy" parameters in that they are not used in any of the final settings I am using)
 #Creates dataset with following variables: X, Y, T, PS(true), Constant vector
 gen_DS_modular <- function(n_obs = 1000,
                            X_dim = 1,
@@ -98,7 +98,8 @@ gen_PS <- function(X,
   #Subset columns of covariates with impact on the PS
   N_shift <- ceiling(ncol(X) * impact_shift) #Share of vars that do not have an impact (from left)
   N_treat <- ceiling(ncol(X) * impact_share) #No of X with impact
-  X_impact <- as.matrix(X[,(1+N_shift):(N_treat+N_shift)], ncol = N_treat)
+  X_impact <- as.matrix(X[,(1+N_shift):(N_treat+N_shift)], ncol = N_treat) #Subsetting (transform to matrix to 
+                                                                           #keep all functions working in case X_impact is one-dimensional)
   
   #Link from X to raw value of PS that will (potentially) transformed by logit/probit link function in next step
   if (impact_formula == "flat"){PS_raw <- rep(0, times = nrow(X))
@@ -200,6 +201,128 @@ gen_Y <- function(X, T,
 }
 
 ###
+# Generate data similar to Huenermund et. al (2022) paper
+###
+
+gen_DS_goodControl <- function(n = 100, #Sample size
+                               p = 100, #Number of variables
+                               q = 10, #Number of variables with non-zero coefficients
+                               b1 = 0.8,
+                               b2 = 0.2,
+                               treatment_impact = 1){
+  X <- matrix(runif(n*p, min = -1, max = 1), ncol = p)
+  beta <- c(rep(b2, q), rep(0, p-q))
+  pi <- c(rep(b1,q), rep(0, p-q))
+  PS_raw <- X %*% pi + runif(n, min = -1, max = 1)
+  PS = exp(PS_raw)/(exp(PS_raw) + 1)
+  T = rbinom(n = n, size = 1, prob = PS)
+  
+  Y <- treatment_impact * T +
+    X %*% beta +
+    runif(n, min = -1, max = 1)
+  
+  #Combine variables in one dataset
+  dataset = data.frame(X,PS,T,Y)
+  
+  #Add vector of constant that is required for some models
+  dataset["OneVector"] = 1
+  
+  dataset$T <- as.factor(dataset$T)
+  
+  return(dataset)
+}
+
+gen_DS_MGraph <- function(n = 100, #Sample size
+                          p = 100, #Number of variables
+                          q = 10, #Number of variables with non-zero coefficients
+                          b1 = 0.8,
+                          b2 = 0.2,
+                          treatment_impact = 1,
+                          TE = "simple") {
+  
+  u1 <- runif (n, min = -1, max = 1)
+  u2 <- runif (n, min = 0, max = 1)
+  
+  # Bad controls
+  x1 <- matrix(runif(n*q, min = -1, max = 1), ncol = q) + sqrt(b1) * u1 + sqrt(b2) * u2
+  # Irrelevant controls
+  x2 <- matrix(runif(n*(p-q), min = -1, max = 1), ncol = (p-q))
+  X <- cbind(x1,x2)
+  
+  PS_raw <- sqrt(b1) * u1 + runif (n, min = -1, max = 1)
+  PS = exp(PS_raw)/(exp(PS_raw) + 1)
+  T = rbinom(n = n, size = 1, prob = PS)
+  if (TE == "simple"){
+  Y <- treatment_impact*T + 
+    sqrt(b2) * u2 + 
+    runif(n, min = -1, max = 1)
+  } else if (TE == "heterogeneous") {
+    Y <- treatment_impact * T + 
+      -3 * treatment_impact * T * u2 + 
+      sqrt(b2) * u2 + 
+      runif(n, min = -1, max = 1)
+  } else if (TE == "heterogeneous_2") {
+    Y <- treatment_impact * T -
+      (1/q) * rowSums(x2) * treatment_impact * 2 * T +
+      sqrt(b2) * u2 +
+      runif(n, min = -1, max = 1)
+  } else if (TE == "heterogeneous_3") {
+    Y <- treatment_impact * T -
+      3 * treatment_impact * T * u1 +
+      sqrt(b2) * u1 +
+      runif(n, min = -1, max = 1)
+  }
+  
+  #Combine variables in one dataset
+  dataset = data.frame(X,PS,T,Y)
+  
+  #Add vector of constant that is required for some models
+  dataset["OneVector"] = 1
+  
+  dataset$T <- as.factor(dataset$T)
+  
+  return(dataset)
+}
+
+gen_DS_Mediator <- function(n = 100, #Sample size
+                            p = 100, #Number of variables
+                            q = 10, #Number of variables with non-zero coefficients
+                            b1 = 0.8,
+                            b2 = 0.2,
+                            treatment_impact = 1,
+                            confounded = FALSE) {
+  PS_raw <- runif(n, min = -1, max = 1)
+  PS = exp(PS_raw)/(exp(PS_raw) + 1)
+  T = rbinom(n = n, size = 1, prob = PS)
+  
+  u <- runif(n, min = -1, max = 1)
+  x1 <- matrix(runif(n*q, min = -1, max = 1), ncol = q) + b1 * T
+  if (confounded){
+    x1 <- x1 + sqrt(b2) * u
+  }
+  x2 <- matrix(runif(n*(p-q), min = -1, max = 1), ncol = (p-q))
+  X <- cbind(x1,x2)
+  
+  beta <- c(rep(b2,q), rep(0, p-q))
+  Y <- treatment_impact * T +
+    X %*% beta + 
+    runif(n, min = -1, max = 1)
+  if (confounded) {
+    Y <- Y + sqrt(b2) * u}
+  
+  #Combine variables in one dataset
+  dataset = data.frame(X,PS,T,Y)
+  
+  #Add vector of constant that is required for some models
+  dataset["OneVector"] = 1
+  
+  dataset$T <- as.factor(dataset$T)
+  
+  return(dataset)
+}
+
+
+###
 # PS probit link function
 # Transform raw values to PS values between 0 and 1 with the probit link function
 # (seems to be wrong)
@@ -210,4 +333,5 @@ probit_function <- function(PS_value){
   PS[PS>1] = 1 #For some specific values (e.g.) 245448, the function returns a value > 1
   PS[PS<0] = 0 #Included this just to make sure
   return(PS)}
+
 

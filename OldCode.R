@@ -698,6 +698,61 @@ DoubleML_treatment_est <- function(data) {
   return(estimate)
 }
 
+DoubleML_treatment_est <- function(data) {
+  #Prepare data
+  dataset <- data[,names(data) != "PS"]
+  dataset["T"] = as.numeric(dataset$T)
+  obj_dml_data = double_ml_data_from_data_frame(dataset, y_col = "Y", d_cols = "T")
+  
+  #Prepare estimator
+  lgr::get_logger("mlr3")$set_threshold("warn")
+  learner = lrn("regr.ranger", num.trees=100, mtry=n_vars, min.node.size=2, max.depth=5)
+  ml_m = learner$clone()
+  ml_g = learner$clone()
+  obj_dml_plr = DoubleMLPLR$new(obj_dml_data,
+                                ml_g, ml_m,
+                                n_folds=2)
+  obj_dml_plr$fit()
+  estimate = obj_dml_plr$coef
+  return(estimate)
+}
+
+DoubleML_treatment_est <- function(data, 
+                                   model = "interactive",
+                                   mtry = "half_N") {
+  #Prepare data
+  dataset <- data[,names(data) != "PS"]
+  dataset["T"] = as.numeric(dataset$T)-1
+  
+  if (mtry =="roor_N") {
+    n_vars = round((ncol(dataset) - 2)^0.5)
+  } else if (mtry == "half_N") {
+    n_vars = round((ncol(dataset) - 2)/2)
+  } else {n_vars = mtry}
+  
+  obj_dml_data = double_ml_data_from_data_frame(dataset, y_col = "Y", d_cols = "T")
+  
+  #Prepare estimator
+  lgr::get_logger("mlr3")$set_threshold("warn")
+  ml_g = lrn("regr.ranger", num.trees = 100, mtry = n_vars, min.node.size = 2, max.depth = 5)
+  ml_m = lrn("classif.ranger", num.trees = 100, mtry = n_vars, min.node.size = 2, max.depth = 5)
+  
+  if (model == "interactive"){
+    obj_dml_plr = DoubleMLIRM$new(obj_dml_data,
+                                  ml_g, ml_m,
+                                  n_rep = 1,
+                                  score = "ATE")
+  } else if (model == "partiallyLinear") {
+    obj_dml_plr = DoubleMLPLR$new(obj_dml_data,
+                                  ml_g, ml_m,
+                                  n_folds=5)
+  }
+  obj_dml_plr$fit()
+  estimate = obj_dml_plr$coef
+  return(estimate)
+}
+
+
 ###
 # Combine PS estimators 
 ###

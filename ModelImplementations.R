@@ -17,7 +17,9 @@ Lasso_PS_pred <- function(data,
                           polynomials_vector = NA,
                           vars_to_exclude = c("Y", "PS"), 
                           nfolds = 5,
-                          return_modelAndPS = FALSE) {
+                          penalty = "CV",
+                          return_modelAndPS = FALSE,
+                          return_penalty = FALSE) {
   
   #Determine that should not be in array of independent variables
   drop_vars <- c(target_var, vars_to_exclude)
@@ -55,9 +57,12 @@ Lasso_PS_pred <- function(data,
   # OR no polynomial vector is specified, which means just main effects are included
   # This check needs to be done since the lasso is not estimated with only zero variance covariates
   if (sum(sum(polynomials_vector)>0 | is.na(polynomials_vector))>0) {
+    if(penalty=="CV"){
   cv.lasso <- cv.glmnet(x = X, y = T, alpha = 1, family = "binomial", nfolds = nfolds)
   log_lasso_reg <- glmnet(x = X, y = T, family = "binomial", alpha = 1, lambda = cv.lasso$lambda.min) 
-  
+    } else if (is.numeric(penalty)){
+      log_lasso_reg <- glmnet(x=X, y=T, family = "binomial", alpha = 1, lambda = penalty)
+    }
   #Add marker which kind of model is calculated, this is later needed in calculation of MISE and SUP
   marker <- "lasso/ridge"
   
@@ -78,6 +83,7 @@ Lasso_PS_pred <- function(data,
   
   #If required in the function call, return predicted PS scores AND the model for later usage
   if(return_modelAndPS){PS_pred_lasso <- list(PS_pred_lasso, log_lasso_reg)}
+  if(return_penalty){PS_pred_lasso <- list(PS_pred_lasso, cv.lasso$lambda.min)}
   
   return(PS_pred_lasso)
 }
@@ -132,6 +138,44 @@ True_PS_pred <- function(data){
   return(PS_true)
 }
 
+###
+# Double/debiased ML
+###
+
+DoubleML_treatment_est <- function(data, 
+                                   model = "interactive",
+                                   mtry = "half_N") {
+  #Prepare data
+  dataset <- data[,names(data) != "PS"]
+  dataset["T"] = as.numeric(dataset$T)-1
+  
+  if (mtry =="root_N") {
+    n_vars = round((ncol(dataset) - 2)^0.5)
+  } else if (mtry == "half_N") {
+    n_vars = round((ncol(dataset) - 2)/2)
+  } else {n_vars = mtry}
+  
+  obj_dml_data = double_ml_data_from_data_frame(dataset, y_col = "Y", d_cols = "T")
+  
+  #Prepare estimator
+  lgr::get_logger("mlr3")$set_threshold("warn")
+  ml_g = lrn("regr.ranger", num.trees = 100, mtry = n_vars, min.node.size = 2, max.depth = 5)
+  ml_m = lrn("classif.ranger", num.trees = 100, mtry = n_vars, min.node.size = 2, max.depth = 5)
+  
+  if (model == "interactive"){
+    obj_dml_plr = DoubleMLIRM$new(obj_dml_data,
+                                  ml_g, ml_m,
+                                  n_rep = 1,
+                                  score = "ATE")
+  } else if (model == "partiallyLinear") {
+    obj_dml_plr = DoubleMLPLR$new(obj_dml_data,
+                                  ml_g, ml_m,
+                                  n_folds=5)
+  }
+  obj_dml_plr$fit()
+  estimate = obj_dml_plr$coef
+  return(estimate)
+}
 
 ###
 # Inverse probability weighting
@@ -214,3 +258,59 @@ enforce_overlap <- function(dataset, PS_est){
   indicator <- PS_est>min_PS_T & PS_est < max_PS_NT
   return(indicator)
 }
+
+
+#Function for sample splitting for cross-fitting
+split_sample <- function(dataset, n_folds = 2){
+  fold_size <- round(nrow(dataset)/n_folds)
+  samples <- list()
+
+  for(i in 1:n_folds){
+    test_index <- (1+((i-1)*fold_size)):(i*fold_size)
+    test <- dataset[test_index,]
+    train <- dataset[-test_index,]
+    samples[[paste0("split", i)]]$train <- train
+    samples[[paste0("split", i)]]$test <- test
+  }
+  return(samples)
+}
+
+#Function to estimate cross-fitted treatment effect estimates
+#First implement with lasso & (N)IPW as default with fixed parameters, can make it more flexible later
+cross_fitter <- function(splitted_data, 
+                         trimming = TRUE){
+  Lasso_out <- Lasso_PS_pred(data = splitted_data$train,
+                             return_modelAndPS = TRUE)
+  model <- Lasso_out[[2]][[1]]
+  marker <- Lasso_out[[2]][[2]]
+  
+  data_pred <- as.matrix(splitted_data$test[,!names(splitted_data$test) %in% c("Y", "T", "PS")])
+  
+  PS_pred <- as.vector(predict(object = model, 
+                               newx = data_pred,
+                               type = "response"))
+  if (trimming == TRUE){
+    quantiles <- stats::quantile(PS_pred, c(0.02,0.98))
+    indicator <- (splitted_data$test$PS > quantiles[[1]] & splitted_data$test$PS < quantiles[[2]])
+  }
+
+  if(mean(indicator>0.95)){
+    PS_pred <- PS_pred[indicator]
+    splitted_data$test <- splitted_data$test[indicator,]
+  }
+
+  IPW_results <- IPW_fun(PS_est = PS_pred,
+                              dataset =  splitted_data$test)
+  NIPW_results <- NIPW_fun(PS_est = PS_pred, 
+                                dataset = splitted_data$test)
+  return(list("IPW" = IPW_results, "NIPW" = NIPW_results))
+}
+
+estimate_aggregator <- function(fitted_values_list){
+  IPW_results <- lapply(fitted_values_list, function(x) return(x[[1]]))
+  NIPW_results <- lapply(fitted_values_list, function(x) return(x[[2]]))
+  return(list("IPW" = mean(unlist(IPW_results)), 
+         "NIPW" = mean(unlist(NIPW_results))))
+}
+
+
