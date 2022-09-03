@@ -3,6 +3,8 @@
 #Might imporve error logging on VM
 options(keep.source = TRUE)
 
+set.seed(111)
+
 #Load packages
 packages <- c("MonteCarlo", "snowfall", "tryCatchLog", "hdm")
 lapply(packages, require, character.only = TRUE)
@@ -378,15 +380,15 @@ invisible(lapply(paste0(getwd(), "/", scripts), source))
 # sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 50,
 #                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
 # save(sim_VM_result, file = "sim_VM_62.Rdata")
-
+# 
 # sim_VM <- function(n_obs, PS_formula, X_dim){
 #   PS_link = "raw"
 #   if (PS_formula %in% c("flat", "linear", "quadraticSymmetric",
 #                         "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
 # 
-#   X_impact_share_PS = 0.001
+#   X_impact_share_PS = 0.002
 #   X_impact_shift_PS = 0
-#   X_impact_share_Y = 0.001
+#   X_impact_share_Y = 0.002
 #   X_impact_shift_Y = 0
 #   dataset <- gen_DS_modular(n_obs = n_obs,
 #                             PS_formula = PS_formula,
@@ -398,7 +400,7 @@ invisible(lapply(paste0(getwd(), "/", scripts), source))
 #                             X_impact_shift_Y = X_impact_shift_Y)
 # 
 #   #Lasso with fixed penalties
-#   lambdas <- c(1, 0.5, 0.1, 0.075, 0.05, 0.025, 0.01, 0.005)#, 0.0005)
+#   lambdas <- c(1, 0.5, 0.25, 0.1, 0.075, 0.05, 0.04, 0.03, 0.02, 0.01, 0.0075, 0.005, 0.0025, 0.001, 0.00075, 0.0005, 0.00025)
 #   fixed_penalty_PS <- list()
 #   for (penalty in lambdas){
 #     PS <- Lasso_PS_pred(data = dataset,
@@ -442,7 +444,7 @@ invisible(lapply(paste0(getwd(), "/", scripts), source))
 #   NIPW_result_cv <- NIPW_fun(PS_est = cv_penalty_PS,
 #                              dataset = dataset_2)
 # 
-#  
+# 
 #   estimates <- c(fixed_penalty_IPW, fixed_penalty_NIPW, IPW_result_cv, NIPW_result_cv,
 #                  cv_selected_penalty)
 #   names(estimates) <- c(fixed_penalty_IPW_names, fixed_penalty_NIPW_names,
@@ -451,20 +453,21 @@ invisible(lapply(paste0(getwd(), "/", scripts), source))
 # }
 # 
 # 
-# param_list <- list("n_obs" = c(750),
+# param_list <- list("n_obs" = c(500),
 #                    "X_dim" = c(500),
-#                    "PS_formula" = c("flat", "linear", "quadraticSymmetric",
-#                                     "quadraticNonSymmetric", "fourthDegree",
-#                                     "peakSymmetric", "peakNonSymmetric", "stepMonotonic",
-#                                     "stepNonMonotonic"))
+#                    "PS_formula" = c(#"flat", "linear", "quadraticSymmetric",
+#                                     "quadraticNonSymmetric",# "fourthDegree",
+#                                     #"peakSymmetric", 
+#                                     "peakNonSymmetric"))#, "stepMonotonic",
+#                                     #"stepNonMonotonic"))
 # 
 # # sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 1,
 # #                                    param_list = param_list, time_n_test = FALSE), write.error.dump.file = TRUE)
 # 
 # sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 1000,
 #                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
-# save(sim_VM_result, file = "sim_VM_75.Rdata")
-
+# save(sim_VM_result, file = "sim_final_2.Rdata")
+# 
 
 ###
 # Testing cross-fitting
@@ -518,208 +521,276 @@ invisible(lapply(paste0(getwd(), "/", scripts), source))
 # Testing cross-fitting
 ###
 # 
-# sim_VM <- function(n_obs, PS_formula, X_dim, impact_share){
-#   PS_link = "raw"
-#   if (PS_formula %in% c("flat", "linear", "quadraticSymmetric",
-#                         "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
-# 
-#   X_impact_shift_PS = 0
-#   X_impact_shift_Y = 0
-#   X_impact_share_Y = impact_share
-#   X_impact_share_PS = impact_share
-# 
-#   dataset <- gen_DS_modular(n_obs = n_obs,
-#                             PS_formula = PS_formula,
-#                             PS_link = PS_link,
-#                             X_dim = X_dim,
-#                             X_impact_share_PS = X_impact_share_PS,
-#                             X_impact_shift_PS = X_impact_shift_PS,
-#                             X_impact_share_Y = X_impact_share_Y,
-#                             X_impact_shift_Y = X_impact_shift_Y)
-# 
+
+
+sim_VM <- function(n_obs, PS_formula, X_dim, impact_share, issue){
+  PS_link = "raw"
+  if (PS_formula %in% c("flat", "linear", "quadraticSymmetric",
+                        "quadraticNonSymmetric", "fourthDegree")) {PS_link = "logit"}
+  
+  #Creating dataset
+  X_impact_shift_PS = 0
+  X_impact_shift_Y = 0
+  X_impact_share_Y = 1/X_dim
+  X_impact_share_PS = 1/X_dim
+  # X_impact_share_Y = impact_share
+  # X_impact_share_PS = impact_share
+  mediator = FALSE
+  unmeasured_PS = FALSE
+  unmeasured_Y = FALSE
+  if (issue == "mediator") {mediator = TRUE}
+  if (issue == "unmeasured_both") {
+    unmeasured_PS = TRUE
+    unmeasured_Y = TRUE}
+  if (issue == "unmeasured_PS") {unmeasured_PS = TRUE}
+  if (issue == "unmeasured_Y") {unmeasured_Y = TRUE}
+
+  dataset <- gen_DS_modular(n_obs = n_obs,
+                            PS_formula = PS_formula,
+                            PS_link = PS_link,
+                            X_dim = X_dim,
+                            X_impact_share_PS = X_impact_share_PS,
+                            X_impact_shift_PS = X_impact_shift_PS,
+                            X_impact_share_Y = X_impact_share_Y,
+                            X_impact_shift_Y = X_impact_shift_Y,
+                            mediator = mediator,
+                            unmeasured_PS = unmeasured_PS,
+                            unmeasured_Y = unmeasured_Y)
+  ###
+  #Naive regression and regression with relevant covariates
+  ###
+  
+  formula_1 <- as.formula(paste0("Y~T+",paste0(names(dataset)[1:round(X_impact_share_PS*X_dim)], collapse = "+")))
+  reg_est <- coef(lm(Y~T, data = dataset))[2]
+  reg_est_correct_covariates <- coef(lm(formula_1, data = dataset))[2]
+  
+  ###
+  #Correctly specified parametric model, including up to ninth degree of polynomial
+  ###
+  
+  polynomials <- c(0,1,2,3,4,5,6,7,8,9)
+  polynomials_vec <- c()
+  PS_scores_log <- list()
+  subset <- c("T", "OneVector", names(dataset)[round(X_dim*X_impact_share_PS)])
+  dataset_log <- dataset[,subset]
+  
+  for (i in polynomials) {
+    polynomials_vec <- c(polynomials_vec, i)
+    PS_scores_log[[i+1]] <- Log_PS_pred(data = dataset_log, polynomials_vector = polynomials_vec, return_Model = FALSE)
+  }
+  names(PS_scores_log) <- polynomials
+  
+  #Trimming datasets with PS scores within [0.02,0.98] percentiles and estimating TEs
+  datasets_log <- list()
+  IPW_results_log <- list()
+  NIPW_results_log <- list()
+  quantiles_list <- lapply(PS_scores_log, stats::quantile, c(0.02,0.98))
+  #quantiles_list <- lapply(PS_scores_lasso, quantile, c(0.02,0.98))
+  
+  for (i in polynomials+1) {
+    indicator <- (PS_scores_log[[i]] > quantiles_list[[i]][[1]] & PS_scores_log[[i]] < quantiles_list[[i]][[2]])
+    if(mean(indicator > 0.95)){
+      datasets_log[[i]] <- dataset[indicator,]
+      PS_scores_log[[i]] <- PS_scores_log[[i]][indicator]
+    } else {
+      datasets_log[[i]] <- dataset
+      PS_scores_log[[i]] <- PS_scores_log[[i]]
+    }
+    IPW_results_log[[i]] <- IPW_fun(PS_est = PS_scores_log[[i]],dataset =  datasets_log[[i]])
+    NIPW_results_log[[i]] <- NIPW_fun(PS_est = PS_scores_log[[i]], dataset = datasets_log[[i]])
+  }
+  names(IPW_results_log) = polynomials
+  names(NIPW_results_log) = polynomials
+  
+  ###
+  # Lasso as PS estimator, including increasing degrees of polynomials
+  ###
+  
+  polynomials_vec <- c()
+  PS_scores_lasso <- list()
+  IPW_results_lasso <- list()
+  NIPW_results_lasso <- list()
+  
+  for (i in polynomials) {
+    polynomials_vec <- c(polynomials_vec, i)
+    PS_scores_lasso[[i+1]] <- Lasso_PS_pred(data = dataset, polynomials_vector = polynomials_vec)
+  }
+  names(PS_scores_lasso) <- polynomials
+  
+  #Trimming datasets with PS scores within [0.02,0.98] percentiles and estimating TEs
+  datasets_lasso <- list()
+  IPW_results_lasso <- list()
+  NIPW_results_lasso <- list()
+  quantiles_list <- lapply(PS_scores_lasso, stats::quantile, c(0.02,0.98))
+  #quantiles_list <- lapply(PS_scores_lasso, quantile, c(0.02,0.98))
+  
+  for (i in polynomials+1) {
+    indicator <- (PS_scores_lasso[[i]] > quantiles_list[[i]][[1]] & PS_scores_lasso[[i]] < quantiles_list[[i]][[2]])
+    if(mean(indicator > 0.95)){
+      datasets_lasso[[i]] <- dataset[indicator,]
+      PS_scores_lasso[[i]] <- PS_scores_lasso[[i]][indicator]
+    } else {
+      datasets_lasso[[i]] <- dataset
+      PS_scores_lasso[[i]] <- PS_scores_lasso[[i]]
+    }
+    IPW_results_lasso[[i]] <- IPW_fun(PS_est = PS_scores_lasso[[i]],dataset =  datasets_lasso[[i]])
+    NIPW_results_lasso[[i]] <- NIPW_fun(PS_est = PS_scores_lasso[[i]], dataset = datasets_lasso[[i]])
+  }
+  names(IPW_results_lasso) = polynomials
+  names(NIPW_results_lasso) = polynomials
+  
+  # #Matching estimator
+  # explanatory <- names(dataset)[!names(dataset) %in% c("T", "Y", "PS")]
+  # nn_match <- nn_one(PS = PS_pred, dataset = dataset_lassoNCF, treatment = "T", explanatory = explanatory)
+  # nn = lm(Y~T, data = nn_match$matched_data, weights = nn_match$weights)$coefficients[["T1"]]
+
+  #Double/debiased ML
+  DML_interactive <- DoubleML_treatment_est(data = dataset,
+                                                  model = "interactive",
+                                                  mtry = "half_N")
+
+  # dml_paper <- coef(rlassoEffect(x=as.matrix(dataset[,1:X_dim]), y = as.matrix(dataset[,X_dim+3]),
+  #                                d = as.matrix(as.numeric(dataset[,X_dim+2])-1), method = "double selection"))["d1"]
+
+
+  #Preparing results
+  estimates <- list()
+  estimates <- append(estimates, c(reg_est, reg_est_correct_covariates,
+                                   IPW_results_log, NIPW_results_log,
+                                   IPW_results_lasso, NIPW_results_lasso,
+                                   DML_interactive))
+  names(estimates) <- c("NaiveReg", "RegWcorrectCovariates",
+                        paste0("Log_IPW_",polynomials), paste0("Log_NIPW_",polynomials),
+                        paste0("Lasso_IPW_",polynomials), paste0("Lasso_NIPW_",polynomials),
+                        "DML")
+  
+  return(estimates)
+}
+
+
+param_list <- list("n_obs" = c(500,1000),
+                   "X_dim" = c(1000),
+                   "impact_share" = c(0.002),#, 0.004, 0.008, 0.016, 0.032),
+                   "PS_formula"=c(#"flat", "linear", "quadraticSymmetric",
+                                  "quadraticNonSymmetric",# "fourthDegree",
+                                  #"peakSymmetric", 
+                                  "peakNonSymmetric"#, "stepMonotonic",
+                                  #"stepNonMonotonic"
+                                  ),
+                   #"issue" = c("simple", "unmeasured", "mediator"))
+                   "issue" = c("simple", "unmeasured_both")
+                   )
+
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 30,
+#                                    param_list = param_list, time_n_test = FALSE), write.error.dump.file = TRUE)
+
+sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 1000,
+                                   param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
+save(sim_VM_result, file = "sim_final_1.Rdata")
+
+
+
+# sim_VM <- function(n_obs, DGP){
+#   q = 10
+#   p = 100
+#   
+#   if (DGP == "goodControl") {
+#     dataset <- gen_DS_goodControl(n = n_obs, p = p, q = q)
+#   } else if (DGP == "simple") {
+#     dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q)
+#   } else if (DGP == "heterogeneous") {
+#     dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q, TE = "heterogeneous")
+#   } else if (DGP == "heterogeneous_2") {
+#     dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q, TE = "heterogeneous_2")
+#   } else if (DGP == "heterogeneous_3") {
+#     dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q, TE = "heterogeneous_3")
+#   } else if (DGP == "mediator") {
+#     dataset <- gen_DS_Mediator(n = n_obs, p = p, q = q)
+#   } else if (DGP == "confounded_mediator") {
+#     dataset <- gen_DS_Mediator(n = n_obs, p = p, q = q, confounded = TRUE)
+#   }
+#   
 #   #Naive regression
 #   reg_est <- coef(lm(Y~T, data = dataset))[2]
-# 
+#   
 #   #Correctly specified parametric model
-#   log_reg <- glm(T~X1, family = binomial(link = "logit"), data = dataset)
+#   regressors <- names(dataset)[1:q]
+#   reg_formula <- as.formula(paste("T ~ ", paste(regressors, collapse= "+")))
+#   log_reg <- glm(reg_formula, family = binomial(link = "logit"), data = dataset)
 #   PS_pred_log <- as.vector(predict.glm(object = log_reg, newdata = dataset, type = "response"))
-# 
-#   quantiles <- stats::quantile(PS_pred_log, c(0.02,0.98))
+#   
 #   #quantiles <- quantile(PS_pred_log, c(0.02,0.98))
+#   quantiles <- stats::quantile(PS_pred_log, c(0.02,0.98))
 #   indicator <- (PS_pred_log > quantiles[[1]] & PS_pred_log < quantiles[[2]])
-#   if(mean(indicator) > 0.95){ #If PS prediction is constat, indicator will throw out all observation
+#   if (mean(indicator) > 0.95) {
+#     PS_pred_log <- PS_pred_log[indicator]
 #     dataset_log <- dataset[indicator,]
-#     PS_pred_log <- PS_pred_log[indicator]} else {dataset_log = dataset}
-# 
+#   } else {dataset_log <- dataset}
+#   
 #   IPW_log <- IPW_fun(PS_est = PS_pred_log, dataset = dataset_log)
 #   NIPW_log <- NIPW_fun(PS_est = PS_pred_log, dataset = dataset_log)
-# 
+#   
 #   #Non-cross-fitted procedure
 #   PS_pred <- Lasso_PS_pred(data = dataset,
-#                           include_interactions = FALSE)
-#   quantiles <- stats::quantile(PS_pred_log, c(0.02,0.98))
+#                            include_interactions = FALSE)
 #   #quantiles <- quantile(PS_pred, c(0.02,0.98))
+#   quantiles <- stats::quantile(PS_pred, c(0.02,0.98))
 #   indicator <- (PS_pred > quantiles[[1]] & PS_pred < quantiles[[2]])
-#   if(mean(indicator) > 0.95){ #If PS prediction is constat, indicator will throw out all observation
+#   
+#   if (mean(indicator) > 0.95) {
+#     PS_pred <- PS_pred[indicator]
 #     dataset_lassoNCF <- dataset[indicator,]
-#     PS_pred <- PS_pred[indicator]} else {dataset_lassoNCF = dataset}
-# 
+#   } else {dataset_lassoNCF <- dataset}
+#   
 #   IPW_results <- IPW_fun(PS_est = PS_pred, dataset =  dataset_lassoNCF)
-#   NIPW_results <- NIPW_fun(PS_est = PS_pred, dataset = dataset_lassoNCF)
-# 
-#   #Matching estimator
-#   explanatory <- names(dataset)[!names(dataset) %in% c("T", "Y", "PS")]
-#   nn_match <- nn_one(PS = PS_pred, dataset = dataset_lassoNCF, treatment = "T", explanatory = explanatory)
-#   nn = lm(Y~T, data = nn_match$matched_data, weights = nn_match$weights)$coefficients[["T1"]]
-# 
+#   NIPW_results <- NIPW_fun(PS_est = PS_pred, dataset =  dataset_lassoNCF)
+#   
 #   #Double/debiased ML
 #   DML_interactive_halfN <- DoubleML_treatment_est(data = dataset,
 #                                                   model = "interactive",
 #                                                   mtry = "half_N")
-# 
-#   dml_paper <- coef(rlassoEffect(x=as.matrix(dataset[,1:X_dim]), y = as.matrix(dataset[,X_dim+3]),
-#                                  d = as.matrix(as.numeric(dataset[,X_dim+2])-1), method = "double selection"))["d1"]
-# 
-# 
+#   # DML_pLinear_halfN <- DoubleML_treatment_est(data = dataset,
+#   #                                             model = "partiallyLinear",
+#   #                                             mtry = "half_N")
+#   
+#   #Approach from 2022 paper with their dml package and post-lasso
+#   dml_paper <- coef(rlassoEffect(x=as.matrix(dataset[,1:p]), y = as.matrix(dataset[,p+3]),
+#                                  d = as.matrix(as.numeric(dataset[,p+2])-1), method = "double selection"))["d1"]
+#   # form <- as.formula(paste0("Y~", paste0(names(dataset)[1:p], collapse = "+"),"+T"))
+#   # post.lasso <- coef(rlasso(form, post = T, intercept = F, data = dataset))["T1"]
+#   
 #   #Preparing results
 #   estimates <- list()
-#   estimates <- append(estimates, c(reg_est,
-#                                    IPW_log, NIPW_log,
-#                                    IPW_results, NIPW_results,
-#                                    #Kernel_002, Kernel_010, Kernel_025,
-#                                    nn,
-#                                    DML_interactive_halfN,
-#                                    dml_paper))
-#   names(estimates) <- c("NaiveReg",
-#                         "Log_IPW", "Log_NIPW",
-#                         "Lasso_IPW", "Lasso_NIPW",
-#                         #"Kernel002", "Kernel010", "Kernel025",
-#                         "NN",
-#                         "DML",
-#                         "DML_paper")
-# 
+#   estimates <- append(estimates, c(reg_est, 
+#                                    IPW_log, NIPW_log, 
+#                                    dml_paper, #post.lasso,
+#                                    IPW_results, NIPW_results, 
+#                                    DML_interactive_halfN))
+#   names(estimates) <- c( "NaiveReg", 
+#                          "Log_IPW", "Log_NIPW",
+#                          "DML_paper", #"Post_Lasso",
+#                          "Lasso_IPW", "Lasso_NIPW",  
+#                          "DML"
+#   )
+#   
 #   return(estimates)
+#   
 # }
 # 
 # 
-# param_list <- list("n_obs" = c(500),
-#                    "X_dim" = c(500),
-#                    "impact_share" = c(0.002, 0.032, 0.1),
-#                    "PS_formula"=c("flat", "linear", "quadraticSymmetric",
-#                                   "quadraticNonSymmetric", "fourthDegree",
-#                                   "peakSymmetric", "peakNonSymmetric", "stepMonotonic",
-#                                   "stepNonMonotonic"))
+# param_list <- list("n_obs" = c(100, 300, 500, 1000),
+#                    "DGP" = c("goodControl",
+#                      "simple", 
+#                              "heterogeneous", "heterogeneous_2", "heterogeneous_3", 
+#                              "mediator", "confounded_mediator"))
 # 
 # # sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 1,
 # #                                    param_list = param_list, time_n_test = FALSE), write.error.dump.file = TRUE)
 # 
-# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 200,
+# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 300,
 #                                    param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
-# save(sim_VM_result, file = "sim_VM_76.Rdata")
-
-
-
-sim_VM <- function(n_obs, DGP){
-  q = 10
-  p = 100
-  
-  if (DGP == "goodControl") {
-    dataset <- gen_DS_goodControl(n = n_obs, p = p, q = q)
-  } else if (DGP == "simple") {
-    dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q)
-  } else if (DGP == "heterogeneous") {
-    dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q, TE = "heterogeneous")
-  } else if (DGP == "heterogeneous_2") {
-    dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q, TE = "heterogeneous_2")
-  } else if (DGP == "heterogeneous_3") {
-    dataset <- gen_DS_MGraph(n = n_obs, p = p, q = q, TE = "heterogeneous_3")
-  } else if (DGP == "mediator") {
-    dataset <- gen_DS_Mediator(n = n_obs, p = p, q = q)
-  } else if (DGP == "confounded_mediator") {
-    dataset <- gen_DS_Mediator(n = n_obs, p = p, q = q, confounded = TRUE)
-  }
-  
-  #Naive regression
-  reg_est <- coef(lm(Y~T, data = dataset))[2]
-  
-  #Correctly specified parametric model
-  regressors <- names(dataset)[1:q]
-  reg_formula <- as.formula(paste("T ~ ", paste(regressors, collapse= "+")))
-  log_reg <- glm(reg_formula, family = binomial(link = "logit"), data = dataset)
-  PS_pred_log <- as.vector(predict.glm(object = log_reg, newdata = dataset, type = "response"))
-  
-  #quantiles <- quantile(PS_pred_log, c(0.02,0.98))
-  quantiles <- stats::quantile(PS_pred_log, c(0.02,0.98))
-  indicator <- (PS_pred_log > quantiles[[1]] & PS_pred_log < quantiles[[2]])
-  if (mean(indicator) > 0.95) {
-    PS_pred_log <- PS_pred_log[indicator]
-    dataset_log <- dataset[indicator,]
-  } else {dataset_log <- dataset}
-  
-  IPW_log <- IPW_fun(PS_est = PS_pred_log, dataset = dataset_log)
-  NIPW_log <- NIPW_fun(PS_est = PS_pred_log, dataset = dataset_log)
-  
-  #Non-cross-fitted procedure
-  PS_pred <- Lasso_PS_pred(data = dataset,
-                           include_interactions = FALSE)
-  #quantiles <- quantile(PS_pred, c(0.02,0.98))
-  quantiles <- stats::quantile(PS_pred, c(0.02,0.98))
-  indicator <- (PS_pred > quantiles[[1]] & PS_pred < quantiles[[2]])
-  
-  if (mean(indicator) > 0.95) {
-    PS_pred <- PS_pred[indicator]
-    dataset_lassoNCF <- dataset[indicator,]
-  } else {dataset_lassoNCF <- dataset}
-  
-  IPW_results <- IPW_fun(PS_est = PS_pred, dataset =  dataset_lassoNCF)
-  NIPW_results <- NIPW_fun(PS_est = PS_pred, dataset =  dataset_lassoNCF)
-  
-  #Double/debiased ML
-  DML_interactive_halfN <- DoubleML_treatment_est(data = dataset,
-                                                  model = "interactive",
-                                                  mtry = "half_N")
-  # DML_pLinear_halfN <- DoubleML_treatment_est(data = dataset,
-  #                                             model = "partiallyLinear",
-  #                                             mtry = "half_N")
-  
-  #Approach from 2022 paper with their dml package and post-lasso
-  dml_paper <- coef(rlassoEffect(x=as.matrix(dataset[,1:p]), y = as.matrix(dataset[,p+3]),
-                                 d = as.matrix(as.numeric(dataset[,p+2])-1), method = "double selection"))["d1"]
-  # form <- as.formula(paste0("Y~", paste0(names(dataset)[1:p], collapse = "+"),"+T"))
-  # post.lasso <- coef(rlasso(form, post = T, intercept = F, data = dataset))["T1"]
-  
-  #Preparing results
-  estimates <- list()
-  estimates <- append(estimates, c(reg_est, 
-                                   IPW_log, NIPW_log, 
-                                   dml_paper, #post.lasso,
-                                   IPW_results, NIPW_results, 
-                                   DML_interactive_halfN))
-  names(estimates) <- c( "NaiveReg", 
-                         "Log_IPW", "Log_NIPW",
-                         "DML_paper", #"Post_Lasso",
-                         "Lasso_IPW", "Lasso_NIPW",  
-                         "DML"
-  )
-  
-  return(estimates)
-  
-}
-
-
-param_list <- list("n_obs" = c(100, 300),
-                   "DGP" = c("goodControl",
-                     "simple", 
-                             "heterogeneous", "heterogeneous_2", "heterogeneous_3", 
-                             "mediator", "confounded_mediator"))
-
-# sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 1,
-#                                    param_list = param_list, time_n_test = FALSE), write.error.dump.file = TRUE)
-
-sim_VM_result <- tryLog(MonteCarlo(func = sim_VM, nrep = 300,
-                                   param_list = param_list, time_n_test = FALSE, ncpus = 16), write.error.dump.file = TRUE)
-save(sim_VM_result, file = "sim_VM_74.Rdata")
-
+# save(sim_VM_result, file = "sim_VM_78.Rdata")
+# 
 
 
 

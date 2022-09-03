@@ -44,13 +44,13 @@ Lasso_PS_pred <- function(data,
     #Over write X with polynomials specified
     X <- polynomials}
   
-  #Calculate interactions if sppecified
+  #Calculate interactions if specified, with "~,2" only two-way interactions are formed
   if (include_interactions & (ncol(raw_X) > 2)) {
-    interactions <- model.matrix( ~.^2, data=data.frame(raw_X[,-ncol(raw_X)]))[,-c(1:ncol(raw_X))]
+    interactions <- model.matrix( ~.^2, data=data.frame(raw_X[,-ncol(raw_X)]))[,-c(1:ncol(raw_X))] #First subset drops one vector, second subset drops non-interacted variables since they are already contained in raw_X
     X <- cbind(X, interactions)}
   
+  #Transform in appropriate format
   X <- as.matrix(X)
-  
   T <- as.matrix(data[,target_var])
   
   #Calculate lasso if there is either a polynomial of degree larger than one specified (sum(polynomials_vector))
@@ -58,23 +58,24 @@ Lasso_PS_pred <- function(data,
   # This check needs to be done since the lasso is not estimated with only zero variance covariates
   if (sum(sum(polynomials_vector)>0 | is.na(polynomials_vector))>0) {
     if(penalty=="CV"){
-  cv.lasso <- cv.glmnet(x = X, y = T, alpha = 1, family = "binomial", nfolds = nfolds)
-  log_lasso_reg <- glmnet(x = X, y = T, family = "binomial", alpha = 1, lambda = cv.lasso$lambda.min) 
+      cv.lasso <- cv.glmnet(x = X, y = T, alpha = 1, family = "binomial", nfolds = nfolds)
+      log_lasso_reg <- glmnet(x = X, y = T, family = "binomial", alpha = 1, lambda = cv.lasso$lambda.min) 
     } else if (is.numeric(penalty)){
       log_lasso_reg <- glmnet(x=X, y=T, family = "binomial", alpha = 1, lambda = penalty)
     }
-  #Add marker which kind of model is calculated, this is later needed in calculation of MISE and SUP
-  marker <- "lasso/ridge"
-  
-  #Add number of polynomials used (also needed for calculation of metrics later)
-  poly <- polynomials_vector
-  
-  #Calculate PS score predictions
-  PS_pred_lasso <- as.vector(predict(object = log_lasso_reg, newx = X, type = "response"))
-  #Add marker so that MISE and SUP functions know which model to use (For log is already added in log function)
-  log_lasso_reg <- list(log_lasso_reg, marker, poly)} else {
+    #Add marker which kind of model is calculated, this is later needed in calculation of MISE and SUP
+    marker <- "lasso/ridge"
     
-    #In case of zzro degree polynomial (only constant regressors), a normal log model which should
+    #Add number of polynomials used (also needed for calculation of metrics later)
+    poly <- polynomials_vector
+    
+    #Calculate PS score predictions
+    PS_pred_lasso <- as.vector(predict(object = log_lasso_reg, newx = X, type = "response"))
+    #Add marker so that MISE and SUP functions know which model to use (For log is already added in log function)
+    log_lasso_reg <- list(log_lasso_reg, marker, poly)
+  } else {
+    
+    #In case of zero degree polynomial (only constant regressors), a normal log model which should
     #predict the mean value of T is calculated instead of the lasso
     PS_pred_lasso <- rep(mean(as.numeric(data$T))-1, nrow(data))
     #Note that the marker of the log model is already added in its own function
@@ -121,18 +122,6 @@ Log_PS_pred <- function(data,
   return(PS_pred_log)
 }
 
-
-Probit_PS_pred <- function(data, 
-                           target_var = "T",
-                           vars_to_exclude = c("Y", "PS")) {
-  drop_vars <- c(target_var, vars_to_exclude)
-  regressors <- names(data)[!names(data) %in% drop_vars]
-  f <- paste(target_var, "~", paste(regressors, collapse = "+"))
-  probit_reg <- glm(f, data = data, family = binomial(link = "probit"))
-  PS_pred_probit <- as.vector(predict.glm(object = probit_reg, newdata = data, type = "response"))
-  return(PS_pred_probit)
-}
-
 True_PS_pred <- function(data){
   PS_true <- data$PS
   return(PS_true)
@@ -144,23 +133,35 @@ True_PS_pred <- function(data){
 
 DoubleML_treatment_est <- function(data, 
                                    model = "interactive",
-                                   mtry = "half_N") {
+                                   PS_model = "rf",
+                                   TE_model = "rf",
+                                   mtry = "default") {
   #Prepare data
   dataset <- data[,names(data) != "PS"]
   dataset["T"] = as.numeric(dataset$T)-1
   
   if (mtry =="root_N") {
-    n_vars = round((ncol(dataset) - 2)^0.5)
+    n_vars_class = round((ncol(dataset) - 2)^0.5)
+    n_vars_reg = round((ncol(dataset) - 2)^0.5)
+  } else if (mtry == "default") {
+    n_vars_class = round(sqrt(ncol(dataset) - 2))
+    n_vars_reg = round((ncol(dataset) - 2)/3)
   } else if (mtry == "half_N") {
-    n_vars = round((ncol(dataset) - 2)/2)
-  } else {n_vars = mtry}
+    n_vars_class = round((ncol(dataset) - 2)/2)
+    n_vars_reg = round((ncol(dataset) - 2)/2)
+  } else {n_vars_class = mtry
+  n_vars_reg = mtry}
   
   obj_dml_data = double_ml_data_from_data_frame(dataset, y_col = "Y", d_cols = "T")
   
   #Prepare estimator
   lgr::get_logger("mlr3")$set_threshold("warn")
-  ml_g = lrn("regr.ranger", num.trees = 100, mtry = n_vars, min.node.size = 2, max.depth = 5)
-  ml_m = lrn("classif.ranger", num.trees = 100, mtry = n_vars, min.node.size = 2, max.depth = 5)
+  if (PS_model == "rf") {
+  ml_g = lrn("regr.ranger", num.trees = 100, mtry = n_vars_reg, min.node.size = 2, max.depth = 5)
+  }
+  if (TE_model == "rf"){
+  ml_m = lrn("classif.ranger", num.trees = 100, mtry = n_vars_class, min.node.size = 2, max.depth = 5)
+  }
   
   if (model == "interactive"){
     obj_dml_plr = DoubleMLIRM$new(obj_dml_data,
@@ -255,7 +256,7 @@ enforce_overlap <- function(dataset, PS_est){
   Ntreated <- dataset$T == 0
   min_PS_T <- min(PS_est[treated])
   max_PS_NT <- max(PS_est[Ntreated])
-  indicator <- PS_est>min_PS_T & PS_est < max_PS_NT
+  indicator <- PS_est > min_PS_T & PS_est < max_PS_NT
   return(indicator)
 }
 
@@ -294,7 +295,7 @@ cross_fitter <- function(splitted_data,
     indicator <- (splitted_data$test$PS > quantiles[[1]] & splitted_data$test$PS < quantiles[[2]])
   }
 
-  if(mean(indicator>0.95)){
+  if (mean(indicator>0.95)){
     PS_pred <- PS_pred[indicator]
     splitted_data$test <- splitted_data$test[indicator,]
   }

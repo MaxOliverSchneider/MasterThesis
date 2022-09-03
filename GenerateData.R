@@ -24,7 +24,10 @@ gen_DS_modular <- function(n_obs = 1000,
                            X_impact_share_Y = 1,
                            X_impact_shift_Y = 0,
                            adjust_alpha_Y = "X_dim",
-                           adjust_standard_deviation_Y = "X_dim") {
+                           adjust_standard_deviation_Y = "X_dim",
+                           mediator = FALSE,
+                           unmeasured_Y = FALSE,
+                           unmeasured_PS = FALSE) {
   #Create covariates
   if(X_dim == "correlated") {
     X = gen_X_cor(n_obs = n_obs)
@@ -35,8 +38,21 @@ gen_DS_modular <- function(n_obs = 1000,
               max = max_X)
   }
   
+  #For now, unmeasured is only implemented for univariate case
+  u1 <- runif (n_obs, min = 0, max = 1)
+  u2 <- runif (n_obs, min = 0, max = 1)
+  if (unmeasured_PS) {
+    #X[,1] <- X[,1] + 0.8 * u1 + 0.2 * u2 
+    X <- X + 0.5 * u1
+  }
+  if (unmeasured_Y) {
+    X <- X + 0.5 * u2
+  }
+  
   #Calculate propensity scores
   PS <- gen_PS(X = X,
+               u1 = u1,
+               unmeasured = unmeasured_PS,
                impact_share = X_impact_share_PS,
                impact_shift = X_impact_shift_PS,
                impact_formula = PS_formula,
@@ -45,8 +61,13 @@ gen_DS_modular <- function(n_obs = 1000,
   #Draw treatment from binomial distribution with propabilites from calculated propensity score
   T = rbinom(n = n_obs, size = 1, prob = PS)
   
+  if (mediator) {
+    X = X + T
+  }
+  
   #Generate outcomes, based on X and T
-  Y = gen_Y(X = X, T = T, 
+  Y = gen_Y(X = X, T = T, u2 = u2,
+            unmeasured = unmeasured_Y,
             impact_share = X_impact_share_Y, 
             impact_shift = X_impact_shift_Y,
             adjust_alpha = adjust_alpha_Y,
@@ -90,7 +111,9 @@ gen_X_cor <- function(n=3, n_obs = 1000){
 ###
 # impact_share determines number of covariates that have an impact on the PS
 # link_type determines the link function used to transform the "raw" PS 
-gen_PS <- function(X, 
+gen_PS <- function(X,
+                   u1,
+                   unmeasured = FALSE,
                    impact_share = 1,
                    impact_shift = 0,
                    impact_formula = "linear", 
@@ -100,6 +123,10 @@ gen_PS <- function(X,
   N_treat <- ceiling(ncol(X) * impact_share) #No of X with impact
   X_impact <- as.matrix(X[,(1+N_shift):(N_treat+N_shift)], ncol = N_treat) #Subsetting (transform to matrix to 
                                                                            #keep all functions working in case X_impact is one-dimensional)
+  
+  if (unmeasured) {
+    X_impact = as.matrix(u1)
+  }
   
   #Link from X to raw value of PS that will (potentially) transformed by logit/probit link function in next step
   if (impact_formula == "flat"){PS_raw <- rep(0, times = nrow(X))
@@ -160,7 +187,8 @@ gen_PS <- function(X,
 # adjust_alpha normalizes the impact of X on Y by 1/adjust_alpha to make the function flexible for high-dimensional settings
 #   (usually default normalizes by number of covariates)
 
-gen_Y <- function(X, T, 
+gen_Y <- function(X, T, u2,
+                  unmeasured = FALSE,
                   impact_share = 1, 
                   impact_shift = 0,
                   adjust_alpha = "X_dim",
@@ -172,6 +200,10 @@ gen_Y <- function(X, T,
   N_shift <- ceiling(ncol(X) * impact_shift) #Share of vars that do not have an impact (from left)
   N_treat <- ceiling(ncol(X) * impact_share) #No of X with impact
   X_impact <- as.matrix(X[,(1+N_shift):(N_treat+N_shift)], ncol = N_treat)
+  
+  if (unmeasured){
+    X_impact = as.matrix(u2)
+  }
   
   #Adjust factor by which X as impact on Y directly and in interaction with T
   if (adjust_alpha == "X_dim"){
@@ -210,10 +242,10 @@ gen_DS_goodControl <- function(n = 100, #Sample size
                                b1 = 0.8,
                                b2 = 0.2,
                                treatment_impact = 1){
-  X <- matrix(runif(n*p, min = -1, max = 1), ncol = p)
+  X <- matrix(runif(n*p, min = 0, max = 2), ncol = p) #Made it[0,2], s.th. ATE != direct effect
   beta <- c(rep(b2, q), rep(0, p-q))
   pi <- c(rep(b1,q), rep(0, p-q))
-  PS_raw <- X %*% pi + runif(n, min = -1, max = 1)
+  PS_raw <- X %*% pi + runif(n, min = -1, max = 1) - b1 * q #Subtract b1*q because otherwise with E(X) = 1, PS would be too large
   PS = exp(PS_raw)/(exp(PS_raw) + 1)
   T = rbinom(n = n, size = 1, prob = PS)
   
@@ -257,8 +289,8 @@ gen_DS_MGraph <- function(n = 100, #Sample size
     sqrt(b2) * u2 + 
     runif(n, min = -1, max = 1)
   } else if (TE == "heterogeneous") {
-    Y <- treatment_impact * T + 
-      -3 * treatment_impact * T * u2 + 
+    Y <- treatment_impact * T -
+      3 * treatment_impact * T * u2 + 
       sqrt(b2) * u2 + 
       runif(n, min = -1, max = 1)
   } else if (TE == "heterogeneous_2") {
@@ -296,7 +328,8 @@ gen_DS_Mediator <- function(n = 100, #Sample size
   T = rbinom(n = n, size = 1, prob = PS)
   
   u <- runif(n, min = -1, max = 1)
-  x1 <- matrix(runif(n*q, min = -1, max = 1), ncol = q) + b1 * T
+  x1 <- matrix(runif(n*q, min = 0, max = 2), ncol = q) + b1 * T #Set x1 to be with positive expected value,
+  # s.th. ATE != direct effect
   if (confounded){
     x1 <- x1 + sqrt(b2) * u
   }
@@ -304,6 +337,7 @@ gen_DS_Mediator <- function(n = 100, #Sample size
   X <- cbind(x1,x2)
   
   beta <- c(rep(b2,q), rep(0, p-q))
+  
   Y <- treatment_impact * T +
     X %*% beta + 
     runif(n, min = -1, max = 1)

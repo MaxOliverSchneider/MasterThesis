@@ -27,6 +27,7 @@ plot_PS_density <- function(dataset, title = "PS Density Plot", subtitle = "") {
 #estimators = c("NIPW_log", "NIPW_true", "IPW_log", "IPW_true", "nn_one_log"))
 #estimators_contain = "IPW_w_poly")
 #Numeric variables like n_obs need to be given numeric and not as string, i.e. n_obs_p = 500
+#IF parameter is one character string it needs to be in the form of "parameterName=parameterValue", e.g. PS_formula_p = "PS_formula=linear"
 #All parameters, ven those with just one option, need to be included in the function call
 #summary(sim_VM_result)
 plot_bias_dist <- function(sim_result, 
@@ -41,6 +42,7 @@ plot_bias_dist <- function(sim_result,
                            PS_formula_p = "PS_impact=linear",
                            XImpact_p = "full",
                            cor_p = "nonCorrelated",
+                           issue_p = "simple", 
                            impact_share_p = 0.002,
                            X_impact_share_p = 1,
                            penalty_p = 1,
@@ -51,6 +53,19 @@ plot_bias_dist <- function(sim_result,
   if(xlim_adjust == "automatic"){
     xlim = c(red_line-abs(red_line),red_line+abs(red_line))
   } else {xlim = xlim_adjust}
+  #If we want to show estimators across different set-ups
+  # estimators <- names(data)[(length(params)+1):length(names(data))]
+  # #data.frame(melt(setDT(data), id.vars = params[1:3], variable.name = "estimators", measure.vars = estimators))
+  # impact_shares <- c(0.002, 0.004, 0.008, 0.016, 0.032)
+  # datasets <- list()
+  # for (impact_share in impact_shares){
+  #   subset <- data.frame(data[data$impact_share == impact_share,])
+  #   datasets <- append(datasets, subset)
+  # }
+  # 
+  # #Merge again by repetition?
+  # # [data$impact_share == 0.002]
+  # 
   params <- names(sim_result$param_list)
   data <- MakeFrame(sim_result)
   data_long <- data.frame(melt(setDT(data), id.vars = params, variable.name = "estimators"))
@@ -75,6 +90,7 @@ plot_bias_dist <- function(sim_result,
     {if("PS_formula" %in% params) filter(., PS_formula %in% PS_formula_p) else . } %>%
     {if("X_impact_share" %in% params) filter(., X_impact_share == X_impact_share_p) else . } %>%
     {if("DGP" %in% params) filter(., DGP == DGP_p) else . } %>%
+    {if("issue" %in% params) filter(., issue == issue_p) else . } %>%
     {if("n_obs" %in% params) filter(., n_obs == n_obs_p) else . } %>%
     {if("PS_link" %in% params) filter(., PS_link == PS_link_p) else . } %>%
     {if("X_dim" %in% params) filter(., X_dim == X_dim_p) else . } %>%
@@ -93,8 +109,8 @@ plot_bias_dist <- function(sim_result,
     graph <- ggplot(data_long_subset, mapping = aes(x = value, color = estimators)) +
       geom_density(size = 1.3) +
       xlim(xlim) +
-      #ggtitle(paste0("DGP: ", PS_formula_p)) +
-      ggtitle(paste0("DGP: ", DGP_p)) +
+      ggtitle(paste0("DGP: ", PS_formula_p)) +
+      #ggtitle(paste0("DGP: ", DGP_p)) +
       #ggtitle(paste0("Penalty: ", as.character(penalty_p))) +
       #ggtitle(paste0("N_Obs ", as.character(n_obs_p))) +
       geom_vline(xintercept = red_line, colour = "red") 
@@ -105,8 +121,8 @@ plot_bias_dist <- function(sim_result,
   if(type=="boxplot"){
     graph <- ggplot(data = data_long_subset, aes(x=estimators, y=value)) +
       geom_boxplot()+
-      ggtitle(paste0("DGP: ", DGP_p)) +
-      #ggtitle(PS_formula_p)+
+      #ggtitle(paste0("DGP: ", DGP_p)) +
+      ggtitle(PS_formula_p)+
       geom_hline(yintercept = red_line, colour = "red") +
       # stat_summary(fun=mean, colour="darkred", geom="point", 
       #              shape=18, size=3, show.legend=TRUE) +
@@ -114,7 +130,12 @@ plot_bias_dist <- function(sim_result,
       #geom_text(data = means, aes(label = value))}
     print(graph)
   }
+  if(type=="histogram"){
+    ggplot(data = data_long_subset, aes(x = value, fill = estimators)) +
+      geom_histogram(alpha = 0.45)
+  }
 }
+
 
 #Plot PS against X
 # ggplot(data = data.frame(PS,X1), aes(x=X1, y=PS)) + geom_line()

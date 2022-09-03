@@ -1,3 +1,16 @@
+#Probit implementation
+Probit_PS_pred <- function(data, 
+                           target_var = "T",
+                           vars_to_exclude = c("Y", "PS")) {
+  drop_vars <- c(target_var, vars_to_exclude)
+  regressors <- names(data)[!names(data) %in% drop_vars]
+  f <- paste(target_var, "~", paste(regressors, collapse = "+"))
+  probit_reg <- glm(f, data = data, family = binomial(link = "probit"))
+  PS_pred_probit <- as.vector(predict.glm(object = probit_reg, newdata = data, type = "response"))
+  return(PS_pred_probit)
+}
+
+
 ####
 # Old functions from generate data
 ####
