@@ -5,7 +5,7 @@ invisible(lapply(paste0(getwd(), "/", scripts), source))
 packages <- c("gdata")
 lapply(packages, require, character.only = TRUE)
 
-simNoToLoad <- "1"
+simNoToLoad <- "73"
 load(paste0("~/Master/FS 21/MA/Frölich/Code/MA/results/sim_VM_",simNoToLoad, ".Rdata"))
 load(paste0("~/Master/FS 21/MA/Frölich/Code/MA/results/sim_final_",simNoToLoad, ".Rdata"))
 MergeResults(path = "~/Master/FS 21/MA/Frölich/Code/MA/results/", identifier = "sim_final_1")
@@ -108,8 +108,9 @@ sim_VM_result[[1]][[1]][1,1,1,1, 1, 1:10]
 data <- MakeFrame(sim_VM_result)
 dt <- data %>% filter(X_dim == 1000) %>%
   filter(n_obs == 1000) %>%
-  filter(issue == "issue=simple") %>%
+  filter(issue == "issue=unmeasured_both") %>%
   select(starts_with("Lasso") | c("PS_formula", "DML")) %>%
+  #select(starts_with("Log") | c("PS_formula")) %>%
   group_by(PS_formula) %>%
   summarise(across(everything(), mean))
 
